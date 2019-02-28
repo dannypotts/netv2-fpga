@@ -700,8 +700,9 @@ void init_rect(int mode) {
   rectangle_vrect_start_write(v_margin);
   rectangle_vrect_end_write(m->v_active - v_margin);
   //  rectangle_rect_thresh_write(rect_thresh);
-  rectangle_chroma_key_hi_write(0x141414);
-  rectangle_chroma_key_lo_write(0x0);
+  rectangle_chroma_key_lo_write(0x141414);
+  rectangle_chroma_key_hi_write(0xffffff);
+  rectangle_chroma_polarity_write(0);
   
   hdmi_core_out0_dma_delay_base_write(120);  // this helps align the DMA transfer through various delay offsets
   // empricially determined, will shift around depending on what you do in the overlay video pipe, e.g.
@@ -916,6 +917,9 @@ void ci_service(void)
 	  unsigned int chroma = strtol(get_token(&str), NULL, 0);
 	  rectangle_chroma_key_hi_write(chroma);
 	}
+	else if(strcmp(token, "chromapol") == 0) {
+	  rectangle_chroma_polarity_write(strtol(get_token(&str), NULL, 0));
+	}
 	else if(strcmp(token, "debug") == 0) {
 		token = get_token(&str);
 		if(strcmp(token, "mmcm") == 0)
@@ -1007,8 +1011,6 @@ void ci_service(void)
 		} else if (strcmp(token, "delay") == 0) {
 		  hdmi_core_out0_dma_delay_base_write((unsigned int) strtoul(get_token(&str), NULL, 0));
 		  wprintf("delay value: %d\r\n", hdmi_core_out0_dma_delay_base_read());
-		} else if( strcmp(token, "rectthresh") == 0) {
-		  rectangle_rect_thresh_write((unsigned short) strtoul(get_token(&str), NULL, 0)); 
 		} else if( strcmp(token, "xadc") == 0) {
 		  wprintf( "xadc: %d mC\n", ((unsigned int)xadc_temperature_read() * 503975) / 4096 - 273150 );
 		} else if( strcmp(token, "km") == 0 ) {

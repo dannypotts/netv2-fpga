@@ -720,12 +720,12 @@ class RectOpening(Module, AutoCSR):
         self.hrect_end = CSRStorage(12)
         self.vrect_start = CSRStorage(12)
         self.vrect_end = CSRStorage(12)
-        self.rect_thresh = CSRStorage(8)
 
         self.pipe_override = CSRStorage(1)
 
         self.chroma_key_hi = CSRStorage(24, reset=0xffffff)
         self.chroma_key_lo = CSRStorage(24, reset=0x141414)
+        self.chroma_polarity = CSRStorage(1)
 
         self.rect_on = Signal()
 
@@ -1182,19 +1182,24 @@ class VideoOverlaySoC(BaseSoC):
         ]
 
         rect_on = Signal()
-        rect_thresh = Signal(8)
 
         self.submodules.rectangle = rectangle = ClockDomainsRenamer("pix_o")( RectOpening(hdmi_in0_timing) )
-        self.comb += rect_on.eq(rectangle.rect_on)
-        self.comb += rect_thresh.eq(rectangle.rect_thresh.storage)
 
+        chlo = Signal(24)
+        chhi = Signal(24)
+        chpol = Signal(1)
         self.sync.pix_o += [ # overlay video selected
-            If(rect_on & ((hdmi_out0_rgb_d.r >= rectangle.chroma_key_lo.storage[:8]) &
-                          (hdmi_out0_rgb_d.g >= rectangle.chroma_key_lo.storage[8:16]) &
-                          (hdmi_out0_rgb_d.b >= rectangle.chroma_key_lo.storage[16:24]) &
-                          (hdmi_out0_rgb_d.r <= rectangle.chroma_key_hi.storage[:8]) &
-                          (hdmi_out0_rgb_d.g <= rectangle.chroma_key_hi.storage[8:16]) &
-                          (hdmi_out0_rgb_d.b <= rectangle.chroma_key_hi.storage[16:24])),
+            chpol.eq(rectangle.chroma_polarity.storage),
+            chlo.eq(rectangle.chroma_key_lo.storage),
+            chhi.eq(rectangle.chroma_key_hi.storage),
+            rect_on.eq(rectangle.rect_on),
+            If(rect_on & (chpol ^
+                         ((hdmi_out0_rgb_d.r >= chlo[:8]) &
+                          (hdmi_out0_rgb_d.g >= chlo[8:16]) &
+                          (hdmi_out0_rgb_d.b >= chlo[16:24]) &
+                          (hdmi_out0_rgb_d.r <= chhi[:8]) &
+                          (hdmi_out0_rgb_d.g <= chhi[8:16]) &
+                          (hdmi_out0_rgb_d.b <= chhi[16:24]))),
                     self.hdmi_out0_phy.sink.c0.eq(encoder_blu.out),
                     self.hdmi_out0_phy.sink.c1.eq(encoder_grn.out),
                     self.hdmi_out0_phy.sink.c2.eq(encoder_red.out),
