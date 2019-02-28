@@ -24,8 +24,9 @@ else
     echo "Cabling type set to $1."
 fi
 
-if [[ $CABLE =~ ^(pcb|cable)$ ]]; then
+if [[ ! $CABLE =~ ^(pcb|cable)$ ]]; then
     echo "Cable type not supported, must be one of \"pcb\" or \"cable\"."
+    exit 0
 fi
 
 
