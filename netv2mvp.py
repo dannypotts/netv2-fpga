@@ -145,35 +145,6 @@ _io = [
         Subsignal("hpd_notif", Pins("U17"), IOStandard("LVCMOS33"), Inverted()),  # HDMI_HPD_LL_N (note active low)
     ),
 
-    # Use this block if connecting a normal HDMI cable to the overlay port
-    # ("hdmi_in", 1,
-    #     Subsignal("clk_p", Pins("Y18"), IOStandard("TMDS_33"), Inverted()),
-    #     Subsignal("clk_n", Pins("Y19"), IOStandard("TMDS_33"), Inverted()),
-    #     Subsignal("data0_p", Pins("AA18"), IOStandard("TMDS_33")),
-    #     Subsignal("data0_n", Pins("AB18"), IOStandard("TMDS_33")),
-    #     Subsignal("data1_p", Pins("AA19"), IOStandard("TMDS_33"), Inverted()),
-    #     Subsignal("data1_n", Pins("AB20"), IOStandard("TMDS_33"), Inverted()),
-    #     Subsignal("data2_p", Pins("AB21"), IOStandard("TMDS_33"), Inverted()),
-    #     Subsignal("data2_n", Pins("AB22"), IOStandard("TMDS_33"), Inverted()),
-    #     Subsignal("scl", Pins("W17"), IOStandard("LVCMOS33"), Inverted()),
-    #     Subsignal("sda", Pins("R17"), IOStandard("LVCMOS33")),
-    # ),
-
-    # Use this block if connecting the M2M jumper to the Raspberry Pi
-    # All pairs inverted to simplify/clean-up routing between the two boards
-    ("hdmi_in", 1,
-     Subsignal("clk_p", Pins("Y18"), IOStandard("TMDS_33")),
-     Subsignal("clk_n", Pins("Y19"), IOStandard("TMDS_33")),
-     Subsignal("data0_p", Pins("AA18"), IOStandard("TMDS_33"), Inverted()),
-     Subsignal("data0_n", Pins("AB18"), IOStandard("TMDS_33"), Inverted()),
-     Subsignal("data1_p", Pins("AA19"), IOStandard("TMDS_33")),
-     Subsignal("data1_n", Pins("AB20"), IOStandard("TMDS_33")),
-     Subsignal("data2_p", Pins("AB21"), IOStandard("TMDS_33")),
-     Subsignal("data2_n", Pins("AB22"), IOStandard("TMDS_33")),
-     Subsignal("scl", Pins("W17"), IOStandard("LVCMOS33"), Inverted()),
-     Subsignal("sda", Pins("R17"), IOStandard("LVCMOS33")),
-     ),
-
     ("hdmi_out", 0,
         Subsignal("clk_p", Pins("W19"), Inverted(), IOStandard("TMDS_33")),
         Subsignal("clk_n", Pins("W20"), Inverted(), IOStandard("TMDS_33")),
@@ -244,15 +215,52 @@ _io = [
 
 
 class Platform(XilinxPlatform):
-    def __init__(self, toolchain="vivado", programmer="vivado", part="35"):
+    def __init__(self, toolchain="vivado", programmer="vivado", part="35", cable="pcb"):
         part = "xc7a" + part + "t-fgg484-2"
-        XilinxPlatform.__init__(self, part, _io,
+
+        io = _io
+
+        if (cable == "pcb"):
+            io += [
+                # Use this block if connecting the M2M jumper to the Raspberry Pi
+                # All pairs inverted to simplify/clean-up routing between the two boards
+                ("hdmi_in", 1,
+                 Subsignal("clk_p", Pins("Y18"), IOStandard("TMDS_33")),
+                 Subsignal("clk_n", Pins("Y19"), IOStandard("TMDS_33")),
+                 Subsignal("data0_p", Pins("AA18"), IOStandard("TMDS_33"), Inverted()),
+                 Subsignal("data0_n", Pins("AB18"), IOStandard("TMDS_33"), Inverted()),
+                 Subsignal("data1_p", Pins("AA19"), IOStandard("TMDS_33")),
+                 Subsignal("data1_n", Pins("AB20"), IOStandard("TMDS_33")),
+                 Subsignal("data2_p", Pins("AB21"), IOStandard("TMDS_33")),
+                 Subsignal("data2_n", Pins("AB22"), IOStandard("TMDS_33")),
+                 Subsignal("scl", Pins("W17"), IOStandard("LVCMOS33"), Inverted()),
+                 Subsignal("sda", Pins("R17"), IOStandard("LVCMOS33")),
+                 )
+            ]
+        else:
+            io += [
+                # Use this block if connecting a normal HDMI cable to the overlay port
+                ("hdmi_in", 1,
+                 Subsignal("clk_p", Pins("Y18"), IOStandard("TMDS_33"), Inverted()),
+                 Subsignal("clk_n", Pins("Y19"), IOStandard("TMDS_33"), Inverted()),
+                 Subsignal("data0_p", Pins("AA18"), IOStandard("TMDS_33")),
+                 Subsignal("data0_n", Pins("AB18"), IOStandard("TMDS_33")),
+                 Subsignal("data1_p", Pins("AA19"), IOStandard("TMDS_33"), Inverted()),
+                 Subsignal("data1_n", Pins("AB20"), IOStandard("TMDS_33"), Inverted()),
+                 Subsignal("data2_p", Pins("AB21"), IOStandard("TMDS_33"), Inverted()),
+                 Subsignal("data2_n", Pins("AB22"), IOStandard("TMDS_33"), Inverted()),
+                 Subsignal("scl", Pins("W17"), IOStandard("LVCMOS33"), Inverted()),
+                 Subsignal("sda", Pins("R17"), IOStandard("LVCMOS33")),
+                 ),
+            ]
+
+        XilinxPlatform.__init__(self, part, io,
                                 toolchain=toolchain)
 
         # NOTE: to do quad-SPI mode, the QE bit has to be set in the SPINOR status register
         # OpenOCD won't do this natively, have to find a work-around (like using iMPACT to set it once)
         self.add_platform_command(
-            "set_property CONFIG_VOLTAGE 3.3 [current_design]")
+        "set_property CONFIG_VOLTAGE 3.3 [current_design]")
         self.add_platform_command(
             "set_property CFGBVS VCCO [current_design]")
         self.add_platform_command(
@@ -716,6 +724,9 @@ class RectOpening(Module, AutoCSR):
 
         self.pipe_override = CSRStorage(1)
 
+        self.chroma_key_hi = CSRStorage(24, reset=0xffffff)
+        self.chroma_key_lo = CSRStorage(24, reset=0x141414)
+
         self.rect_on = Signal()
 
         # counter for pixel position based on the incoming HDMI0 stream.
@@ -1177,16 +1188,17 @@ class VideoOverlaySoC(BaseSoC):
         self.comb += rect_on.eq(rectangle.rect_on)
         self.comb += rect_thresh.eq(rectangle.rect_thresh.storage)
 
-        self.sync.pix_o += [
-            If(rectangle.pipe_override.storage,
-                 self.hdmi_out0_phy.sink.c0.eq(self.hdmi_in0.data0_cap.d),
-                 self.hdmi_out0_phy.sink.c1.eq(self.hdmi_in0.data1_cap.d),
-                 self.hdmi_out0_phy.sink.c2.eq(self.hdmi_in0.data2_cap.d),
-            ).Elif(rect_on & (hdmi_out0_rgb_d.r >= rect_thresh) & (hdmi_out0_rgb_d.g >= rect_thresh) & (hdmi_out0_rgb_d.b >= rect_thresh),
+        self.sync.pix_o += [ # overlay video selected
+            If(rect_on & ((hdmi_out0_rgb_d.r >= rectangle.chroma_key_lo.storage[:8]) &
+                          (hdmi_out0_rgb_d.g >= rectangle.chroma_key_lo.storage[8:16]) &
+                          (hdmi_out0_rgb_d.b >= rectangle.chroma_key_lo.storage[16:24]) &
+                          (hdmi_out0_rgb_d.r <= rectangle.chroma_key_hi.storage[:8]) &
+                          (hdmi_out0_rgb_d.g <= rectangle.chroma_key_hi.storage[8:16]) &
+                          (hdmi_out0_rgb_d.b <= rectangle.chroma_key_hi.storage[16:24])),
                     self.hdmi_out0_phy.sink.c0.eq(encoder_blu.out),
                     self.hdmi_out0_phy.sink.c1.eq(encoder_grn.out),
                     self.hdmi_out0_phy.sink.c2.eq(encoder_red.out),
-            ).Else(
+            ).Else( # background video selected
                     self.hdmi_out0_phy.sink.c0.eq(c0_pix_o),
                     self.hdmi_out0_phy.sink.c1.eq(c1_pix_o),
                     self.hdmi_out0_phy.sink.c2.eq(c2_pix_o),
@@ -1304,9 +1316,12 @@ def main():
     parser.add_argument(
         "-d", "--dqsphase", help="set DQS phase offset", choices=["45.0", "67.5", "90.0", "112.5", "135.0", "157.5", "180.0"], default="112.5"
     )
+    parser.add_argument(
+        "-c", "--cable", help="select overlay cabling type", choices=["pcb", "cable"], default="pcb"
+    )
     args = parser.parse_args()
 
-    platform = Platform(part=args.part)
+    platform = Platform(part=args.part, cable=args.cable)
     if args.target == "base":
         soc = BaseSoC(platform)
     elif args.target == "video_overlay":

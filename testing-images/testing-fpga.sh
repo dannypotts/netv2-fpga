@@ -121,7 +121,7 @@ fi
 
 printf "\n\nBurning FPGA gateware bitstream to SPINOR (~1 minute)...\n"
 sudo openocd \
-     -c "set FPGAIMAGE $GIT_DIR/production-images/$FPGAIMAGE" \
+     -c "set FPGAIMAGE $GIT_DIR/testing-images/$FPGAIMAGE" \
      -c "set BSCAN_FILE $OCD_SCRIPT_DIR/$BSCANIMAGE" \
      -f $OCD_SCRIPT_DIR/cl-spifpga.cfg
 if [ $? -ne 0 ]
