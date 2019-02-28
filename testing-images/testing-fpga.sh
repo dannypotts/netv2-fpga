@@ -41,7 +41,7 @@ fi
 
 printf "\n\nPulling updated firmware...\n"
 cd $GIT_DIR
-git pull origin master
+git pull origin 
 if [ $? -ne 0 ]
 then
     printf "Can't pull update to firmware. Check network connectivity and confirm git repo at $GIT_DIR with remote origin of https://github.com/AlphamaxMedia/netv2-fpga.git. Press return to exit.\n"
