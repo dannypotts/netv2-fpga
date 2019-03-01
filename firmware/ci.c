@@ -703,6 +703,7 @@ void init_rect(int mode) {
   rectangle_chroma_key_lo_write(0x141414);
   rectangle_chroma_key_hi_write(0xffffff);
   rectangle_chroma_polarity_write(0);
+  rectangle_chroma_mode_write(0);
   
   hdmi_core_out0_dma_delay_base_write(120);  // this helps align the DMA transfer through various delay offsets
   // empricially determined, will shift around depending on what you do in the overlay video pipe, e.g.
@@ -919,6 +920,9 @@ void ci_service(void)
 	}
 	else if(strcmp(token, "chromapol") == 0) {
 	  rectangle_chroma_polarity_write(strtol(get_token(&str), NULL, 0));
+	}
+	else if(strcmp(token, "chromamode") == 0) {
+	  rectangle_chroma_mode_write(strtol(get_token(&str), NULL, 0));
 	}
 	else if(strcmp(token, "debug") == 0) {
 		token = get_token(&str);

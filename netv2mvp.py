@@ -48,6 +48,9 @@ from migen.genlib.cdc import MultiReg
 from litex.soc.cores import spi_flash
 from litex.soc.integration.soc_core import mem_decoder
 
+from litevideo.csc.rgb2ycbcr import rgb2ycbcr_coefs, RGB2YCbCr, RGB2YCbCrDatapath
+from litevideo.csc.common import *
+
 _io = [
     ("clk50", 0, Pins("J19"), IOStandard("LVCMOS33")),
 
@@ -726,6 +729,7 @@ class RectOpening(Module, AutoCSR):
         self.chroma_key_hi = CSRStorage(24, reset=0xffffff)
         self.chroma_key_lo = CSRStorage(24, reset=0x141414)
         self.chroma_polarity = CSRStorage(1)
+        self.chroma_mode = CSRStorage(1)
 
         self.rect_on = Signal()
 
@@ -1099,6 +1103,30 @@ class VideoOverlaySoC(BaseSoC):
             # the output records are directly consumed down below
         ]
 
+        ### YCbCr converter
+        rgb2ycbcr = RGB2YCbCr()
+        self.submodules.rgb2ycbcr = rgb2ycbcr = ClockDomainsRenamer("pix_o")(rgb2ycbcr)
+#        self.hdmi_out0_ycbcr = hdmi_out0_ycbcr = stream.Endpoint(ycbcr444_layout(8))
+        self.comb += [
+            self.rgb2ycbcr.sink.payload.b.eq(core_source_data_d[0:8]),
+            self.rgb2ycbcr.sink.payload.g.eq(core_source_data_d[8:16]),
+            self.rgb2ycbcr.sink.payload.r.eq(core_source_data_d[16:24]),
+            self.rgb2ycbcr.sink.valid.eq(1),
+            self.rgb2ycbcr.source.ready.eq(1),
+
+#            self.hdmi_out0_ycbcr.connect(self.rgb2ycbcr.source),
+#            self.hdmi_out0_ycbcr.valid.eq(1),
+        ]
+        timing_csc_delay = TimingDelayRGB(4 + RGB2YCbCrDatapath.latency)
+        timing_csc_delay = ClockDomainsRenamer("pix_o")(timing_csc_delay)
+        self.submodules += timing_csc_delay
+        self.hdmi_out0_rgb_csc = hdmi_out0_rgb_csc = stream.Endpoint(rgb_layout)
+        self.comb += [
+            timing_csc_delay.sink.eq(hdmi_out0_rgb),
+            hdmi_out0_rgb_csc.eq(timing_csc_delay.source),
+        ]
+
+
         ##### HDCP engine
         platform.add_source(os.path.join("overlay", "i2c_snoop.v"))
         platform.add_source(os.path.join("overlay", "diff_network.v"))
@@ -1130,15 +1158,29 @@ class VideoOverlaySoC(BaseSoC):
         self.submodules.encoder_grn = encoder_grn = ClockDomainsRenamer("pix_o")(Encoder())
         self.submodules.encoder_blu = encoder_blu = ClockDomainsRenamer("pix_o")(Encoder())
 
+        self.submodules.rectangle = rectangle = ClockDomainsRenamer("pix_o")(RectOpening(hdmi_in0_timing))
+
         self.comb += [
-            If(hdcp.Km_valid.storage,  # this is a proxy for HDCP being initialized
-               encoder_red.d.eq(hdmi_out0_rgb.r ^ hdcp.cipher_stream[16:]), # 23:16
-               encoder_grn.d.eq(hdmi_out0_rgb.g ^ hdcp.cipher_stream[8:16]),  # 15:8
-               encoder_blu.d.eq( (hdmi_out0_rgb.b ^ hdcp.cipher_stream[0:8])),  # 7:0
-               ).Else(
-                encoder_red.d.eq(hdmi_out0_rgb.r),
-                encoder_grn.d.eq(hdmi_out0_rgb.g),
-                encoder_blu.d.eq(hdmi_out0_rgb.b),
+            If(rectangle.chroma_mode.storage,
+               If(hdcp.Km_valid.storage,  # this is a proxy for HDCP being initialized
+                  encoder_red.d.eq(self.rgb2ycbcr.source.cr ^ hdcp.cipher_stream[16:]),  # 23:16
+                  encoder_grn.d.eq(self.rgb2ycbcr.source.y ^ hdcp.cipher_stream[8:16]),  # 15:8
+                  encoder_blu.d.eq((self.rgb2ycbcr.source.cb ^ hdcp.cipher_stream[0:8])),  # 7:0
+                  ).Else(
+                   encoder_red.d.eq(self.rgb2ycbcr.source.cr),   # channel 2
+                   encoder_grn.d.eq(self.rgb2ycbcr.source.y),  # channel 1
+                   encoder_blu.d.eq(self.rgb2ycbcr.source.cb),  # channel 0
+               ),
+            ).Else(
+                If(hdcp.Km_valid.storage,  # this is a proxy for HDCP being initialized
+                   encoder_red.d.eq(hdmi_out0_rgb.r ^ hdcp.cipher_stream[16:]), # 23:16
+                   encoder_grn.d.eq(hdmi_out0_rgb.g ^ hdcp.cipher_stream[8:16]),  # 15:8
+                   encoder_blu.d.eq( (hdmi_out0_rgb.b ^ hdcp.cipher_stream[0:8])),  # 7:0
+                   ).Else(
+                    encoder_red.d.eq(hdmi_out0_rgb.r),
+                    encoder_grn.d.eq(hdmi_out0_rgb.g),
+                    encoder_blu.d.eq(hdmi_out0_rgb.b),
+                ),
             ),
             encoder_red.de.eq(1),
             encoder_red.c.eq(0), # we promise to use this only during video areas, so "c" is always 0
@@ -1183,17 +1225,27 @@ class VideoOverlaySoC(BaseSoC):
 
         rect_on = Signal()
 
-        self.submodules.rectangle = rectangle = ClockDomainsRenamer("pix_o")( RectOpening(hdmi_in0_timing) )
-
         chlo = Signal(24)
         chhi = Signal(24)
         chpol = Signal(1)
+        chmode = Signal(1)
         self.sync.pix_o += [ # overlay video selected
             chpol.eq(rectangle.chroma_polarity.storage),
             chlo.eq(rectangle.chroma_key_lo.storage),
             chhi.eq(rectangle.chroma_key_hi.storage),
+            chmode.eq(rectangle.chroma_mode.storage),
             rect_on.eq(rectangle.rect_on),
-            If(rect_on & (chpol ^
+            If(chmode & rect_on & (chpol ^
+                         ((hdmi_out0_rgb_csc.r >= chlo[:8]) &
+                          (hdmi_out0_rgb_csc.g >= chlo[8:16]) &
+                          (hdmi_out0_rgb_csc.b >= chlo[16:24]) &
+                          (hdmi_out0_rgb_csc.r <= chhi[:8]) &
+                          (hdmi_out0_rgb_csc.g <= chhi[8:16]) &
+                          (hdmi_out0_rgb_csc.b <= chhi[16:24]))),
+               self.hdmi_out0_phy.sink.c0.eq(encoder_blu.out),
+               self.hdmi_out0_phy.sink.c1.eq(encoder_grn.out),
+               self.hdmi_out0_phy.sink.c2.eq(encoder_red.out),
+            ).Elif(~chmode & rect_on & (chpol ^
                          ((hdmi_out0_rgb_d.r >= chlo[:8]) &
                           (hdmi_out0_rgb_d.g >= chlo[8:16]) &
                           (hdmi_out0_rgb_d.b >= chlo[16:24]) &
