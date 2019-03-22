@@ -36,7 +36,8 @@ int hdmi_in0_fb_index;
 #define HDMI_IN0_PHASE_ADJUST_WER_THRESHOLD 1
 #define HDMI_IN0_PHASE_ADJUST_WER_THRESHOLD_2 3000
 
-#define HDMI_IN0_AUTO_CTL_DEFAULT   (0x6f)
+#define HDMI_IN0_AUTO_CTL_DEFAULT    (0x6f)
+#define HDMI_IN0_AUTO_CTL_DELMECH0   (0x6b)
 
 #define HDMI_IN0_ROUNDING 3
 
@@ -118,8 +119,16 @@ static int hdmi_in0_compute_auto_bt_val(int bit_rate_value) {
     printf( "error: unhandled idelay_freq value, input link convergence will not work\n" );
   }
 
-  if( del_mech == 0 ) {
-    printf( "uhandled case: bitrate low enough that del_mech needs changing\n" );
+  if( del_mech ) {
+    printf( "selecting delmech = 1\n" );
+    hdmi_in0_data0_cap_auto_ctl_write(HDMI_IN0_AUTO_CTL_DEFAULT);
+    hdmi_in0_data1_cap_auto_ctl_write(HDMI_IN0_AUTO_CTL_DEFAULT);
+    hdmi_in0_data2_cap_auto_ctl_write(HDMI_IN0_AUTO_CTL_DEFAULT);
+  } else {
+    printf( "selecting delmech = 0\n" );
+    hdmi_in0_data0_cap_auto_ctl_write(HDMI_IN0_AUTO_CTL_DELMECH0);
+    hdmi_in0_data1_cap_auto_ctl_write(HDMI_IN0_AUTO_CTL_DELMECH0);
+    hdmi_in0_data2_cap_auto_ctl_write(HDMI_IN0_AUTO_CTL_DELMECH0);
   }
   return bt_val;
 }
@@ -197,7 +206,7 @@ void hdmi_in0_isr(void)
 static int hdmi_in0_connected;
 int hdmi_in0_locked;
 
-void hdmi_in0_init_video(int hres, int vres)
+void hdmi_in0_init_video(int hres, int vres, int freq)
 {
 	if( idelay_freq == 400000000 ) {
 	  iodelay_tap_duration = 39;
@@ -241,7 +250,7 @@ void hdmi_in0_init_video(int hres, int vres)
 #if 0
 	int bit_time = (673 / iodelay_tap_duration) + HDMI_IN0_ROUNDING;  // 18 if you should round up, not truncate
 #else
-	int bit_time = hdmi_in0_compute_auto_bt_val( 1450 );
+	int bit_time = hdmi_in0_compute_auto_bt_val( freq / 10 );
 #endif
 	printf( "hdmi_in0: setting algo 2 eye time to %d IDELAY periods\n", bit_time );
 	hdmi_in0_data0_cap_eye_bit_time_write(bit_time);

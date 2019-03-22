@@ -33,4 +33,6 @@ void mmcm_config_for_clock(int freq);
 void mmcm_dump(void);
 void mmcm_dump_code(void);
 
+void hdmi_in_0_config_60_120mhz_table();
+void hdmi_in_0_config_120_240mhz_table();
 #endif

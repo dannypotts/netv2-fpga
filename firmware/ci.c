@@ -674,9 +674,11 @@ void ci_prompt(void)
 	wprintf("RUNTIME>");
 }
 
-void init_rect(int mode) {
-  const struct video_timing *m = &video_modes[mode];
+void init_rect(int mode, int hack) {
+  const struct video_timing *m = &(video_modes[mode]);
 
+  //  printf( "Mode sanity check: hactive %d, vactive %d\n", m->h_active, m->v_active );
+  
   hdmi_core_out0_initiator_enable_write(0);
 
   hdmi_core_out0_initiator_base_write(hdmi_in1_framebuffer_base(hdmi_in1_fb_index));
@@ -689,8 +691,29 @@ void init_rect(int mode) {
   hdmi_core_out0_initiator_vsync_start_write(m->v_active + m->v_sync_offset);
   hdmi_core_out0_initiator_vsync_end_write(m->v_active + m->v_sync_offset + m->v_sync_width);
   hdmi_core_out0_initiator_vscan_write(m->v_active + m->v_blanking);
+
+  hdmi_core_out0_dma_hres_out_write(m->h_active - 1);
+  hdmi_core_out0_dma_vres_out_write(m->v_active - 1);
   
-  hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*4);
+  if( hack == 1 ) {
+    hdmi_core_out0_dma_line_skip_write(1920 - 1280); // skip to beginning of next line every hsync
+    
+  } else {
+    hdmi_core_out0_dma_line_skip_write(0);
+  }
+
+  if( hack == 1 ) {
+    hdmi_core_out0_initiator_length_write(1920 * 720 * 4); // 1920 hactive (incl skip) over 720 lines
+    printf( "initiator_length: %x\n", hdmi_core_out0_initiator_length_read() );
+    //    hdmi_core_out0_initiator_length_write(1920 * 128); // 1920 hactive (incl skip) over 720 lines
+
+    hdmi_core_out0_dma_delay_base_write(14 * 4);
+  } else {
+    hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*4);
+    hdmi_core_out0_dma_delay_base_write(30 * 4);  // this helps align the DMA transfer through various delay offsets
+    // empricially determined, will shift around depending on what you do in the overlay video pipe, e.g.
+    // ycrcb422 vs rgb
+  }
 
   int h_margin = 32;
   int v_margin = 10;
@@ -704,10 +727,6 @@ void init_rect(int mode) {
   rectangle_chroma_key_hi_write(0xffffff);
   rectangle_chroma_polarity_write(0);
   rectangle_chroma_mode_write(0);
-  
-  hdmi_core_out0_dma_delay_base_write(120);  // this helps align the DMA transfer through various delay offsets
-  // empricially determined, will shift around depending on what you do in the overlay video pipe, e.g.
-  // ycrcb422 vs rgb
   
   hdmi_core_out0_initiator_enable_write(1);
 }
@@ -924,6 +943,18 @@ void ci_service(void)
 	else if(strcmp(token, "chromamode") == 0) {
 	  rectangle_chroma_mode_write(strtol(get_token(&str), NULL, 0));
 	}
+	else if(strcmp(token, "720p") == 0) {
+	  hdmi_in_0_config_60_120mhz_table();
+	  processor_set_hdmi_in0_pixclk(7425); // TODO update these from mode list table
+	  hdmi_in0_init_video(1280, 720, 7425);
+	  init_rect(9, 1);
+	}
+	else if(strcmp(token, "1080p") == 0) {
+	  hdmi_in_0_config_120_240mhz_table();
+	  processor_set_hdmi_in0_pixclk(14850); // TODO update these from mode list table
+	  hdmi_in0_init_video(1920, 1080, 14850);
+	  init_rect(11, 0);
+	}
 	else if(strcmp(token, "debug") == 0) {
 		token = get_token(&str);
 		if(strcmp(token, "mmcm") == 0)
@@ -966,7 +997,7 @@ void ci_service(void)
 			if(found == 0)
 				wprintf("%s port has no EDID capabilities\r\n", token);
 		} else if(strcmp(token, "rect") == 0 ) {
-		  init_rect(config_get(CONFIG_KEY_RESOLUTION));
+		  init_rect(config_get(CONFIG_KEY_RESOLUTION), 0);
 		} else if(strcmp(token, "nudge") == 0 ) {
 		  int chan = strtol(get_token(&str), NULL, 0);
 		  int amount = strtol(get_token(&str), NULL, 0);
