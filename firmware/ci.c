@@ -708,6 +708,9 @@ void init_rect(int mode, int hack) {
     //    hdmi_core_out0_initiator_length_write(1920 * 128); // 1920 hactive (incl skip) over 720 lines
 
     hdmi_core_out0_dma_delay_base_write(14 * 4);
+  } else if( hack == 2 ) {
+    hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*4);
+    hdmi_core_out0_dma_delay_base_write(30 * 4);  // this helps align the DMA transfer through various delay offsets
   } else {
     hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*4);
     hdmi_core_out0_dma_delay_base_write(30 * 4);  // this helps align the DMA transfer through various delay offsets
@@ -948,17 +951,35 @@ void ci_service(void)
 	  processor_set_hdmi_in0_pixclk(7425); // TODO update these from mode list table
 	  hdmi_in0_init_video(1280, 720, 7425);
 	  init_rect(9, 1);
+	  hdmi_core_out0_dma_interlace_write(0); 
+	}
+	else if(strcmp(token, "1080i") == 0) {
+	  hdmi_in_0_config_60_120mhz_table();
+	  processor_set_hdmi_in0_pixclk(7425); // TODO update these from mode list table
+	  hdmi_in0_init_video(1920, 1080, 7425);
+	  init_rect(15, 2);
+	  hdmi_core_out0_dma_field_pos_write(1320); // half of active + blank = (1920 + 720) / 2
+	  if(strcmp(token, "odd") == 0)
+	    hdmi_core_out0_dma_interlace_write(3); // enable interlacing with odd parity
+	  else
+	    hdmi_core_out0_dma_interlace_write(1); // enable interlacing with even parity
 	}
 	else if(strcmp(token, "1080p") == 0) {
 	  hdmi_in_0_config_120_240mhz_table();
 	  processor_set_hdmi_in0_pixclk(14850); // TODO update these from mode list table
 	  hdmi_in0_init_video(1920, 1080, 14850);
 	  init_rect(11, 0);
+	  hdmi_core_out0_dma_interlace_write(0); 
 	}
 	else if(strcmp(token, "debug") == 0) {
 		token = get_token(&str);
 		if(strcmp(token, "mmcm") == 0)
 			debug_mmcm();
+		else if(strcmp(token, "inter") == 0) {
+		  // debug interlace settings
+		  printf("even pos: %d\n", hdmi_core_out0_dma_even_pos_read());
+		  printf("odd pos: %d\n", hdmi_core_out0_dma_odd_pos_read());
+		}
 #ifdef CSR_HDMI_IN0_BASE
 		else if(strcmp(token, "input0") == 0) {
 			hdmi_in0_debug = !hdmi_in0_debug;

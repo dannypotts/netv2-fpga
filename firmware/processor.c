@@ -317,7 +317,20 @@ const struct video_timing video_modes[PROCESSOR_MODE_COUNT] = {
 		.v_sync_offset = 1,
 		.v_sync_width = 3,
 		.comment = "(HV20/HV30 in PAL mode)"
-	}
+	},
+	{ // 1080i/50
+		.pixel_clock = 74250,
+
+		.h_active = 1920,
+		.h_blanking = 720,
+		.h_sync_offset = 528,
+		.h_sync_width = 44,
+
+		.v_active = 1080,
+		.v_blanking = 23,
+		.v_sync_offset = 2,
+		.v_sync_width = 5
+	},
 
 };
 

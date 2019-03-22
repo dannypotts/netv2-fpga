@@ -562,6 +562,7 @@ class BaseSoC(SoCSDRAM):
             ident="NeTV2 LiteX Base SoC",
             reserve_nmi_interrupt=False,
             cpu_type="vexriscv",
+            csr_address_width=15,
 #            cpu_variant="debug",
             **kwargs)
 
