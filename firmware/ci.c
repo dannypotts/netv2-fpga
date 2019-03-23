@@ -709,7 +709,7 @@ void init_rect(int mode, int hack) {
 
     hdmi_core_out0_dma_delay_base_write(14 * 4);
   } else if( hack == 2 ) {
-    hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*4);
+    hdmi_core_out0_initiator_length_write(m->h_active* (m->v_active - 1) *4);
     hdmi_core_out0_dma_delay_base_write(30 * 4);  // this helps align the DMA transfer through various delay offsets
   } else {
     hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*4);
