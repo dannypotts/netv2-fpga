@@ -709,8 +709,10 @@ void init_rect(int mode, int hack) {
 
     hdmi_core_out0_dma_delay_base_write(14 * 4);
   } else if( hack == 2 ) {
-    hdmi_core_out0_initiator_length_write(m->h_active* (m->v_active - 1) *4);
+    hdmi_core_out0_initiator_length_write(m->h_active* m->v_active *4);
     hdmi_core_out0_dma_delay_base_write(30 * 4);  // this helps align the DMA transfer through various delay offsets
+
+    hdmi_core_out0_dma_vres_out_write(m->v_active - 2);
   } else {
     hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*4);
     hdmi_core_out0_dma_delay_base_write(30 * 4);  // this helps align the DMA transfer through various delay offsets
@@ -724,13 +726,18 @@ void init_rect(int mode, int hack) {
   rectangle_hrect_start_write(h_margin);
   rectangle_hrect_end_write(m->h_active - h_margin);
   rectangle_vrect_start_write(v_margin);
-  rectangle_vrect_end_write(m->v_active - v_margin);
+  if( hack == 2 ) {
+    rectangle_vrect_end_write(m->v_active - v_margin - 2);
+  } else {
+    rectangle_vrect_end_write(m->v_active - v_margin);
+  }
+  
   //  rectangle_rect_thresh_write(rect_thresh);
   rectangle_chroma_key_lo_write(0x141414);
   rectangle_chroma_key_hi_write(0xffffff);
   rectangle_chroma_polarity_write(0);
   rectangle_chroma_mode_write(0);
-  
+
   hdmi_core_out0_initiator_enable_write(1);
 }
 
