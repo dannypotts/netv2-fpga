@@ -18,7 +18,6 @@ from litex.build.xilinx import XilinxPlatform
 from litex.soc.integration.builder import *
 from litex.soc.cores.clock import *
 
-from gateware import adc
 from migen.genlib.cdc import PulseSynchronizer
 
 sim_config = {
