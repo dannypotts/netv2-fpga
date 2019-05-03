@@ -118,6 +118,7 @@ endmodule""")
 
 # this ties it all together
 def run_sim(gui=False):
+    os.system("mkdir -p run")
     os.system("rm -rf run/xsim.dir")
     if sys.platform == "win32":
         call_cmd = "call "
