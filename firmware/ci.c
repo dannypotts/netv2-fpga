@@ -696,9 +696,14 @@ void init_rect(int mode, int hack) {
   hdmi_core_out0_dma_vres_out_write(m->v_active - 1);
   
   if( hack == 1 ) {
+    // 720p
     hdmi_core_out0_dma_line_skip_write(1920 - 1280); // skip to beginning of next line every hsync
     
+  } else if( hack == 2 ) {
+    // 1080i
+    hdmi_core_out0_dma_line_skip_write(0);
   } else {
+    // 1080p
     hdmi_core_out0_dma_line_skip_write(0);
   }
 
@@ -967,9 +972,9 @@ void ci_service(void)
 	  init_rect(15, 2);
 	  hdmi_core_out0_dma_field_pos_write(1320); // half of active + blank = (1920 + 720) / 2
 	  if(strcmp(token, "odd") == 0)
-	    hdmi_core_out0_dma_interlace_write(3); // enable interlacing with odd parity
+	    hdmi_core_out0_dma_interlace_write(1);
 	  else
-	    hdmi_core_out0_dma_interlace_write(1); // enable interlacing with even parity
+	    hdmi_core_out0_dma_interlace_write(3);
 	}
 	else if(strcmp(token, "1080p") == 0) {
 	  hdmi_in_0_config_120_240mhz_table();
@@ -986,6 +991,15 @@ void ci_service(void)
 		  // debug interlace settings
 		  printf("even pos: %d\n", hdmi_core_out0_dma_even_pos_read());
 		  printf("odd pos: %d\n", hdmi_core_out0_dma_odd_pos_read());
+		} else if(strcmp(token, "interswap") == 0) {
+		  if( !(hdmi_core_out0_dma_interlace_read() & 1) ) {
+		    printf( "Not in interlace mode, aborting!\n" );
+		    return;
+		  }
+		  if( hdmi_core_out0_dma_interlace_read() == 1 )
+		    hdmi_core_out0_dma_interlace_write(3);
+		  else
+		    hdmi_core_out0_dma_interlace_write(1);
 		}
 #ifdef CSR_HDMI_IN0_BASE
 		else if(strcmp(token, "input0") == 0) {
