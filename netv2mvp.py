@@ -833,7 +833,7 @@ class VideoOverlaySoC(BaseSoC):
         hdmi_in0_pads = platform.request("hdmi_in", 0)
         self.submodules.hdmi_in0_freq = FrequencyMeter(period=self.clk_freq)
         self.submodules.hdmi_in0 = hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7", split_mmcm=True, hdmi=True, iodelay_clk_freq=iodelay_clk_freq, alt_delay=True)
-        self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix.clk)
+        self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix_raw.clk) # pick from "raw" so PLL lock isn't in the way of freq detection
         # don't add clock timings here, we add a root clock constraint that derives the rest automatically
 
         # define path constraints individually to sysclk to avoid accidentally declaring other inter-clock paths as false paths
@@ -856,6 +856,11 @@ class VideoOverlaySoC(BaseSoC):
         self.platform.add_false_path_constraints(
             self.crg.cd_sys.clk,
             self.hdmi_in0.clocking.cd_pix5x_o.clk
+        )
+        # false timing path for the frequency meter on hdmi in 0
+        self.platform.add_false_path_constraints(
+            self.hdmi_in0.clocking.cd_pix_raw.clk,
+            self.crg.cd_sys.clk
         )
 
         hdmi_out0_pads = platform.request("hdmi_out", 0)  ## TODO: pull latest litevideo and re-validate pix_o mapping
