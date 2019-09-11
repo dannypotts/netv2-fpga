@@ -134,6 +134,24 @@ static int hdmi_in0_compute_auto_bt_val(int bit_rate_value) {
 }
 
 #ifdef HDMI_IN0_INTERRUPT
+
+void hdmi_in0_terc4_isr(void) {
+  static int count = 1;
+  unsigned int status;
+  
+  status = hdmi_in0_decode_terc4_ev_pending_read();
+  hdmi_in0_decode_terc4_ev_pending_write(status);
+  
+  hdmi_in0_decode_terc4_ev_enable_write(3);
+
+  // limit debug spew rate
+  if( count % 120 == 0 ) {
+    printf( "hdmi0 terc4 bch4: 0x%08x\n", hdmi_in0_decode_terc4_t4d_bch4_read());
+  }
+  count++;
+}
+
+#if 0 // no DMA interrupts in hdmi0 path
 void hdmi_in0_isr(void)
 {
 	int fb_index = -1;
@@ -201,7 +219,9 @@ void hdmi_in0_isr(void)
 		hdmi_in0_fb_index = fb_index;
 	processor_update();
 }
-#endif
+
+#endif // if 0 around dma interrupt stuff
+#endif // if around interrupt stuff
 
 static int hdmi_in0_connected;
 int hdmi_in0_locked;
@@ -226,6 +246,7 @@ void hdmi_in0_init_video(int hres, int vres, int freq)
 
 	puts( "setting up HDMI0 interrupts\n" );
 
+#if 0	// no DMA interrupts
 	hdmi_in0_dma_frame_size_write(hres*vres*2);
 	hdmi_in0_fb_slot_indexes[0] = 0;
 	hdmi_in0_dma_slot0_address_write(hdmi_in0_framebuffer_base(0));
@@ -237,11 +258,18 @@ void hdmi_in0_init_video(int hres, int vres, int freq)
 
 	hdmi_in0_dma_ev_pending_write(hdmi_in0_dma_ev_pending_read());
 	hdmi_in0_dma_ev_enable_write(0x3);
+	
+	hdmi_in0_fb_index = 3;
+#endif
+
+#if 0
+	// setup terc4 handler
+	hdmi_in0_decode_terc4_ev_pending_write(3);
+	hdmi_in0_decode_terc4_ev_enable_write(3);
 	mask = irq_getmask();
 	mask |= 1 << HDMI_IN0_INTERRUPT;
 	irq_setmask(mask);
-
-	hdmi_in0_fb_index = 3;
+#endif
 	
 #endif
 
@@ -277,8 +305,10 @@ void hdmi_in0_disable(void)
 	mask &= ~(1 << HDMI_IN0_INTERRUPT);
 	irq_setmask(mask);
 
+#if 0
 	hdmi_in0_dma_slot0_status_write(DVISAMPLER_SLOT_EMPTY);
 	hdmi_in0_dma_slot1_status_write(DVISAMPLER_SLOT_EMPTY);
+#endif
 #endif
 	hdmi_in0_clocking_mmcm_reset_write(1);
 }
@@ -659,10 +689,12 @@ int hdmi_in0_phase_startup(int freq)
 static void hdmi_in0_check_overflow(void)
 {
 #ifdef HDMI_IN0_INTERRUPT
+#if 0
 	if(hdmi_in0_frame_overflow_read()) {
 		printf("hdmi_in0: FIFO overflow\r\n");
 		hdmi_in0_frame_overflow_write(1);
 	}
+#endif
 #endif
 }
 

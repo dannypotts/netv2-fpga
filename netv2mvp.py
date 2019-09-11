@@ -562,7 +562,7 @@ class BaseSoC(SoCSDRAM):
             ident="NeTV2 LiteX Base SoC",
             reserve_nmi_interrupt=False,
             cpu_type="vexriscv",
-            csr_address_width=15,
+            csr_address_width=16,
 #            cpu_variant="debug",
             **kwargs)
 
@@ -813,6 +813,7 @@ class VideoOverlaySoC(BaseSoC):
     interrupt_map = {
         "hdmi_in1": 3,
         "hdcp" : 4,
+        "hdmi_in0": 5,
     }
     interrupt_map.update(BaseSoC.interrupt_map)
 

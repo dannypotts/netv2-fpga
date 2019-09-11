@@ -8,6 +8,7 @@ extern int hdmi_in0_algorithm;
 unsigned int hdmi_in0_framebuffer_base(char n);
 
 void hdmi_in0_isr(void);
+void hdmi_in0_terc4_isr(void);
 void hdmi_in0_init_video(int hres, int vres, int freq);
 void hdmi_in0_disable(void);
 void hdmi_in0_clear_framebuffers(void);

@@ -1130,6 +1130,30 @@ void ci_service(void)
 		  hdmi_in0_data0_cap_auto_ctl_write(0x2f);
 		  hdmi_in0_data1_cap_auto_ctl_write(0x2f);
 		  hdmi_in0_data2_cap_auto_ctl_write(0x2f);
+		} else if (strcmp(token, "t4i") == 0 ) {
+		  unsigned int mask;
+		  // setup terc4 handler
+		  hdmi_in0_decode_terc4_ev_pending_write(3);
+		  
+		  mask = irq_getmask();
+		  mask |= 1 << HDMI_IN0_INTERRUPT;
+		  irq_setmask(mask);
+		  printf("interrupt mask (t4i): %x\n", mask);
+		  
+		  hdmi_in0_decode_terc4_ev_enable_write(3);
+		  printf("terc4_ev_enable_read: %d\n", hdmi_in0_decode_terc4_ev_enable_read());
+		  
+		} else if (strcmp(token, "t4d") == 0 ) {
+		  printf( "hdmi0 terc4 packet cnt: %d, char cnt: %d\n", hdmi_in1_decode_terc4_t4d_count_read(), hdmi_in1_decode_terc4_t4d_char_read());
+		  printf( "hdmi0 terc4 bch0: 0x%08x%08x\n", (unsigned long) (hdmi_in0_decode_terc4_t4d_bch0_read() >> 32),
+			  (unsigned long) hdmi_in0_decode_terc4_t4d_bch0_read());
+		  printf( "hdmi0 terc4 bch1: 0x%08x%08x\n", (unsigned long) (hdmi_in0_decode_terc4_t4d_bch1_read() >> 32),
+			  (unsigned long) hdmi_in0_decode_terc4_t4d_bch1_read());
+		  printf( "hdmi0 terc4 bch2: 0x%08x%08x\n", (unsigned long) (hdmi_in0_decode_terc4_t4d_bch2_read() >> 32),
+			  (unsigned long) hdmi_in0_decode_terc4_t4d_bch2_read());
+		  printf( "hdmi0 terc4 bch3: 0x%08x%08x\n", (unsigned long) (hdmi_in0_decode_terc4_t4d_bch3_read() >> 32),
+			  (unsigned long) hdmi_in0_decode_terc4_t4d_bch3_read());
+		  printf( "hdmi0 terc4 bch4: 0x%08x\n", hdmi_in0_decode_terc4_t4d_bch4_read());
 		} else {
 		  help_debug();
 		}
