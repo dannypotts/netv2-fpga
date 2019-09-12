@@ -64,6 +64,9 @@ References:
  * 720p and TV modes - https://www.mythtv.org/wiki/Modeline_Database
 
 */
+
+static int hdmi_in0_pixclk = 0;
+
 const struct video_timing video_modes[PROCESSOR_MODE_COUNT] = {
 	// 640x480 @ 72Hz (VESA) hsync: 37.9kHz
 	// ModeLine "640x480"    31.5  640  664  704  832    480  489  491  520
@@ -314,7 +317,20 @@ const struct video_timing video_modes[PROCESSOR_MODE_COUNT] = {
 		.v_sync_offset = 1,
 		.v_sync_width = 3,
 		.comment = "(HV20/HV30 in PAL mode)"
-	}
+	},
+	{ // 1080i/50
+		.pixel_clock = 74250,
+
+		.h_active = 1920,
+		.h_blanking = 720,
+		.h_sync_offset = 528,
+		.h_sync_width = 44,
+
+		.v_active = 1080,
+		.v_blanking = 23,
+		.v_sync_offset = 2,
+		.v_sync_width = 5
+	},
 
 };
 
@@ -555,19 +571,20 @@ void processor_start(int mode) {
   pattern_fill_framebuffer(m->h_active, m->v_active);
   
   mmcm_config_for_clock(m->pixel_clock);
+  hdmi_in0_pixclk = m->pixel_clock;
   fb_set_mode(m);
   //	const struct video_timing *n = &video_modes[11]; // fix to 1080p @ 60Hz
   //	edid_set_mode(n);
   edid_set_mode(m);
 
-  hdmi_in0_init_video(m->h_active, m->v_active);
+  hdmi_in0_init_video(m->h_active, m->v_active, m->pixel_clock);
   hdmi_in1_init_video(m->h_active, m->v_active);
 
   hdmi_in0_edid_hpd_en_write(1);
   hdmi_in1_edid_hpd_en_write(1);
 
   hdcp_init();
-  init_rect(config_get(CONFIG_KEY_RESOLUTION));
+  init_rect(config_get(CONFIG_KEY_RESOLUTION), 0);
 
   hdmi_core_out0_initiator_base_write(hdmi_in1_framebuffer_base(hdmi_in1_fb_index));
 }
@@ -598,6 +615,10 @@ void processor_update(void)
   //  hdmi_core_out0_initiator_base_write(hdmi_in1_framebuffer_base(hdmi_in1_fb_index));
 }
 
+void processor_set_hdmi_in0_pixclk(int freq) {
+  hdmi_in0_pixclk = freq;
+}
+
 extern int hdmi_in0_locked;
 volatile int cur_irq_mask = 0;
 void processor_service(void)
@@ -606,7 +627,7 @@ void processor_service(void)
 
 	cur_irq_mask = irq_getmask();
 
-	hdmi_in0_service(m->pixel_clock);  // HDMI in 0 is a passthrough
+	hdmi_in0_service(hdmi_in0_pixclk);  // HDMI in 0 is a passthrough
 	
 	if( hdmi_in0_locked ) {
 	  hdmi_in1_service(m->pixel_clock);  // don't service this unless we have hdmi in0 locked

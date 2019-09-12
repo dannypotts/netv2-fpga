@@ -17,10 +17,6 @@ void isr(void)
 		uart_isr();
 	}
 
-#ifdef CSR_HDMI_IN0_INTERRUPT
-	if(irqs & (1 << HDMI_IN0_INTERRUPT))
-		hdmi_in0_isr();
-#endif
 #ifdef HDMI_IN1_INTERRUPT
 	if(irqs & (1 << HDMI_IN1_INTERRUPT)) {
 	  hdmi_in1_isr();
@@ -31,6 +27,11 @@ void isr(void)
 		hdcp_isr();
 	}
 #endif
-
+#ifdef CSR_HDMI_IN0_DECODE_TERC4_EV_ENABLE_ADDR
+	if(irqs & (1 << HDMI_IN0_INTERRUPT)) {
+	  hdmi_in0_terc4_isr(); // actually handling a terc4 decode, not a DMA ISR. Awful API, I know.
+	}
+#endif
+	
 	hdcp_debug_write(0);
 }

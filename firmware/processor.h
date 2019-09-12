@@ -1,7 +1,7 @@
 #ifndef __PROCESSOR_H
 #define __PROCESSOR_H
 
-#define PROCESSOR_MODE_COUNT 14
+#define PROCESSOR_MODE_COUNT 16
 #define PROCESSOR_MODE_DESCLEN 64
 
 enum {
@@ -35,4 +35,5 @@ char * processor_get_source_name(int source);
 void processor_update(void);
 void processor_service(void);
 
+void processor_set_hdmi_in0_pixclk(int freq);
 #endif /* __PROCESSOR_H */

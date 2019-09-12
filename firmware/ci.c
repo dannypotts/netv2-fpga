@@ -137,6 +137,9 @@ static void ci_help(void)
 	wputs("mw                             - write address space");
 	wputs("mc                             - copy address space");
 	wputs("");
+	wputs("chromalo #rrggbb               - chroma low threshold in hex");
+	wputs("chromahi #rrggbb               - chroma high threshold in hex");
+	wputs("");
 	help_status();
 	wputs("");
 	help_video_matrix();
@@ -286,7 +289,7 @@ static void json_print(void) {
 
   wprintf( "\"hdmi_Rx_hres\" : %d, ", hdmi_in0_resdetection_hres_read() );
   wprintf( "\"hdmi_Rx_vres\" : %d, ", hdmi_in0_resdetection_vres_read() );
-  wprintf( "\"hdmi_Rx_pixel_clock\" : %d, ", hdmi_in0_freq_value_read());
+  wprintf( "\"hdmi_Rx_pixel_clock\" : %d, ", hdmi_in0_freq_value_read()*10); // modded to converge faster
 
   hdmi_in0_data0_wer_update_write(1);
   hdmi_in0_data1_wer_update_write(1);
@@ -352,8 +355,8 @@ static void status_print(void)
 		hdmi_in0_resdetection_hres_read(),
 		hdmi_in0_resdetection_vres_read());
 #ifdef CSR_HDMI_IN0_FREQ_BASE
-	wprintf(" (@ %3d.%2d MHz)", hdmi_in0_freq_value_read() / 1000000,
-		                        (hdmi_in0_freq_value_read() / 10000) % 100);
+	wprintf(" (@ %3d.%2d MHz)", hdmi_in0_freq_value_read() * 10 / 1000000,
+		                        (hdmi_in0_freq_value_read() * 10 / 10000) % 100);
 #endif
 	wprintf("\r\n");
 #endif
@@ -671,9 +674,11 @@ void ci_prompt(void)
 	wprintf("RUNTIME>");
 }
 
-void init_rect(int mode) {
-  const struct video_timing *m = &video_modes[mode];
+void init_rect(int mode, int hack) {
+  const struct video_timing *m = &(video_modes[mode]);
 
+  //  printf( "Mode sanity check: hactive %d, vactive %d\n", m->h_active, m->v_active );
+  
   hdmi_core_out0_initiator_enable_write(0);
 
   hdmi_core_out0_initiator_base_write(hdmi_in1_framebuffer_base(hdmi_in1_fb_index));
@@ -686,22 +691,63 @@ void init_rect(int mode) {
   hdmi_core_out0_initiator_vsync_start_write(m->v_active + m->v_sync_offset);
   hdmi_core_out0_initiator_vsync_end_write(m->v_active + m->v_sync_offset + m->v_sync_width);
   hdmi_core_out0_initiator_vscan_write(m->v_active + m->v_blanking);
-  
-  hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*4);
 
-  int h_margin = 32;
-  int v_margin = 10;
+  hdmi_core_out0_dma_hres_out_write(m->h_active - 1);
+  hdmi_core_out0_dma_vres_out_write(m->v_active - 1);
+  
+  if( hack == 1 ) {
+    // 720p
+    hdmi_core_out0_dma_line_skip_write(1920 - 1280); // skip to beginning of next line every hsync
+    
+  } else if( hack == 2 ) {
+    // 1080i
+    hdmi_core_out0_dma_line_skip_write(0);
+  } else {
+    // 1080p
+    hdmi_core_out0_dma_line_skip_write(0);
+  }
+
+  if( hack == 1 ) {
+    hdmi_core_out0_initiator_length_write(1920 * 720 * 4); // 1920 hactive (incl skip) over 720 lines
+    printf( "initiator_length: %x\n", hdmi_core_out0_initiator_length_read() );
+    //    hdmi_core_out0_initiator_length_write(1920 * 128); // 1920 hactive (incl skip) over 720 lines
+
+    hdmi_core_out0_dma_line_align_write(1280 - 12 * 8 - 1); // 1183
+    hdmi_core_out0_dma_delay_base_write(0); // retire this parameter
+    
+  } else if( hack == 2 ) {
+    hdmi_core_out0_initiator_length_write(m->h_active* m->v_active *4);
+    hdmi_core_out0_dma_line_align_write(1920 - 16 * 8 - 1);  // this helps align the DMA transfer through various delay offsets
+    hdmi_core_out0_dma_delay_base_write(0); // retire this parameter
+
+    hdmi_core_out0_dma_vres_out_write(m->v_active - 2);
+  } else {
+    hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*4);
+    hdmi_core_out0_dma_line_align_write(1920 - 16 * 8 - 1);  // this helps align the DMA transfer through various delay offsets
+    hdmi_core_out0_dma_delay_base_write(0); // retire this parameter
+    // empricially determined, will shift around depending on what you do in the overlay video pipe, e.g.
+    // ycrcb422 vs rgb
+  }
+
+  rectangle_rect_enable_write(0); // setup the rectangle, but don't use it -- we are now using DE gating
+  int h_margin = 0; // cut off the white line on the right projected by magic mirror
+  int v_margin = 0;
   int rect_thresh = 20; // reasonable for magic mirror use, which is mostly a black UI
-  rectangle_hrect_start_write(h_margin);
+  rectangle_hrect_start_write(0);
   rectangle_hrect_end_write(m->h_active - h_margin);
   rectangle_vrect_start_write(v_margin);
-  rectangle_vrect_end_write(m->v_active - v_margin);
-  rectangle_rect_thresh_write(rect_thresh);
+  if( hack == 2 ) {
+    rectangle_vrect_end_write(m->v_active - v_margin - 2);
+  } else {
+    rectangle_vrect_end_write(m->v_active - v_margin);
+  }
   
-  hdmi_core_out0_dma_delay_base_write(120);  // this helps align the DMA transfer through various delay offsets
-  // empricially determined, will shift around depending on what you do in the overlay video pipe, e.g.
-  // ycrcb422 vs rgb
-  
+  //  rectangle_rect_thresh_write(rect_thresh);
+  rectangle_chroma_key_lo_write(0x141414);
+  rectangle_chroma_key_hi_write(0xffffff);
+  rectangle_chroma_polarity_write(0);
+  rectangle_chroma_mode_write(0);
+
   hdmi_core_out0_initiator_enable_write(1);
 }
 
@@ -903,10 +949,63 @@ void ci_service(void)
 	  else
 	    json_print();
 	}
+	else if(strcmp(token, "chromalo") == 0) {
+	  unsigned int chroma = strtol(get_token(&str), NULL, 0);
+	  rectangle_chroma_key_lo_write(chroma);
+	}
+	else if(strcmp(token, "chromahi") == 0) {
+	  unsigned int chroma = strtol(get_token(&str), NULL, 0);
+	  rectangle_chroma_key_hi_write(chroma);
+	}
+	else if(strcmp(token, "chromapol") == 0) {
+	  rectangle_chroma_polarity_write(strtol(get_token(&str), NULL, 0));
+	}
+	else if(strcmp(token, "chromamode") == 0) {
+	  rectangle_chroma_mode_write(strtol(get_token(&str), NULL, 0));
+	}
+	else if(strcmp(token, "720p") == 0) {
+	  hdmi_in_0_config_60_120mhz_table();
+	  processor_set_hdmi_in0_pixclk(7425); // TODO update these from mode list table
+	  hdmi_in0_init_video(1280, 720, 7425);
+	  init_rect(9, 1);
+	  hdmi_core_out0_dma_interlace_write(0); 
+	}
+	else if(strcmp(token, "1080i") == 0) {
+	  hdmi_in_0_config_60_120mhz_table();
+	  processor_set_hdmi_in0_pixclk(7425); // TODO update these from mode list table
+	  hdmi_in0_init_video(1920, 1080, 7425);
+	  init_rect(15, 2);
+	  hdmi_core_out0_dma_field_pos_write(1320); // half of active + blank = (1920 + 720) / 2
+	  if(strcmp(token, "odd") == 0)
+	    hdmi_core_out0_dma_interlace_write(1);
+	  else
+	    hdmi_core_out0_dma_interlace_write(3);
+	}
+	else if(strcmp(token, "1080p") == 0) {
+	  hdmi_in_0_config_120_240mhz_table();
+	  processor_set_hdmi_in0_pixclk(14850); // TODO update these from mode list table
+	  hdmi_in0_init_video(1920, 1080, 14850);
+	  init_rect(11, 0);
+	  hdmi_core_out0_dma_interlace_write(0); 
+	}
 	else if(strcmp(token, "debug") == 0) {
 		token = get_token(&str);
 		if(strcmp(token, "mmcm") == 0)
 			debug_mmcm();
+		else if(strcmp(token, "inter") == 0) {
+		  // debug interlace settings
+		  printf("even pos: %d\n", hdmi_core_out0_dma_even_pos_read());
+		  printf("odd pos: %d\n", hdmi_core_out0_dma_odd_pos_read());
+		} else if(strcmp(token, "interswap") == 0) {
+		  if( !(hdmi_core_out0_dma_interlace_read() & 1) ) {
+		    printf( "Not in interlace mode, aborting!\n" );
+		    return;
+		  }
+		  if( hdmi_core_out0_dma_interlace_read() == 1 )
+		    hdmi_core_out0_dma_interlace_write(3);
+		  else
+		    hdmi_core_out0_dma_interlace_write(1);
+		}
 #ifdef CSR_HDMI_IN0_BASE
 		else if(strcmp(token, "input0") == 0) {
 			hdmi_in0_debug = !hdmi_in0_debug;
@@ -945,7 +1044,7 @@ void ci_service(void)
 			if(found == 0)
 				wprintf("%s port has no EDID capabilities\r\n", token);
 		} else if(strcmp(token, "rect") == 0 ) {
-		  init_rect(config_get(CONFIG_KEY_RESOLUTION));
+		  init_rect(config_get(CONFIG_KEY_RESOLUTION), 0);
 		} else if(strcmp(token, "nudge") == 0 ) {
 		  int chan = strtol(get_token(&str), NULL, 0);
 		  int amount = strtol(get_token(&str), NULL, 0);
@@ -983,19 +1082,20 @@ void ci_service(void)
 		} else if(strcmp(token, "setrect") == 0 ) {
 		  const struct video_timing *m = &video_modes[12];
 		  m = &video_modes[12];
-		  
+
+		  rectangle_rect_enable_write(1);
 		  rectangle_hrect_start_write((unsigned short) strtoul(get_token(&str), NULL, 0));
 		  rectangle_hrect_end_write((unsigned short) strtoul(get_token(&str), NULL, 0));
 		  // vblank on top of frame so compensate in offset
 		  rectangle_vrect_start_write((unsigned short) strtoul(get_token(&str), NULL, 0) + m->v_blanking ); 
 		  rectangle_vrect_end_write((unsigned short) strtoul(get_token(&str), NULL, 0) + m->v_blanking );
 		} else if(strcmp(token, "rectoff") == 0 ) {
+		  rectangle_rect_enable_write(0);
+		} else if(strcmp(token, "overlayoff") == 0 ) {
 		  hdmi_core_out0_initiator_enable_write(0);
 		} else if (strcmp(token, "delay") == 0) {
 		  hdmi_core_out0_dma_delay_base_write((unsigned int) strtoul(get_token(&str), NULL, 0));
 		  wprintf("delay value: %d\r\n", hdmi_core_out0_dma_delay_base_read());
-		} else if( strcmp(token, "rectthresh") == 0) {
-		  rectangle_rect_thresh_write((unsigned short) strtoul(get_token(&str), NULL, 0)); 
 		} else if( strcmp(token, "xadc") == 0) {
 		  wprintf( "xadc: %d mC\n", ((unsigned int)xadc_temperature_read() * 503975) / 4096 - 273150 );
 		} else if( strcmp(token, "km") == 0 ) {
@@ -1038,6 +1138,34 @@ void ci_service(void)
 		  hdmi_in0_data0_cap_auto_ctl_write(0x2f);
 		  hdmi_in0_data1_cap_auto_ctl_write(0x2f);
 		  hdmi_in0_data2_cap_auto_ctl_write(0x2f);
+		} else if (strcmp(token, "t4i") == 0 ) {
+		  unsigned int mask;
+		  // setup terc4 handler
+		  hdmi_in0_decode_terc4_ev_pending_write(3);
+		  
+		  mask = irq_getmask();
+		  mask |= 1 << HDMI_IN0_INTERRUPT;
+		  irq_setmask(mask);
+		  printf("interrupt mask (t4i): %x\n", mask);
+		  
+		  hdmi_in0_decode_terc4_ev_enable_write(3);
+		  printf("terc4_ev_enable_read: %d\n", hdmi_in0_decode_terc4_ev_enable_read());
+		  
+		} else if (strcmp(token, "t4d") == 0 ) {
+		  printf( "hdmi0 terc4 packet cnt: %d, char cnt: %d\n", hdmi_in1_decode_terc4_t4d_count_read(), hdmi_in1_decode_terc4_t4d_char_read());
+		  printf( "hdmi0 terc4 bch0: 0x%08x%08x\n", (unsigned long) (hdmi_in0_decode_terc4_t4d_bch0_read() >> 32),
+			  (unsigned long) hdmi_in0_decode_terc4_t4d_bch0_read());
+		  printf( "hdmi0 terc4 bch1: 0x%08x%08x\n", (unsigned long) (hdmi_in0_decode_terc4_t4d_bch1_read() >> 32),
+			  (unsigned long) hdmi_in0_decode_terc4_t4d_bch1_read());
+		  printf( "hdmi0 terc4 bch2: 0x%08x%08x\n", (unsigned long) (hdmi_in0_decode_terc4_t4d_bch2_read() >> 32),
+			  (unsigned long) hdmi_in0_decode_terc4_t4d_bch2_read());
+		  printf( "hdmi0 terc4 bch3: 0x%08x%08x\n", (unsigned long) (hdmi_in0_decode_terc4_t4d_bch3_read() >> 32),
+			  (unsigned long) hdmi_in0_decode_terc4_t4d_bch3_read());
+		  printf( "hdmi0 terc4 bch4: 0x%08x\n", hdmi_in0_decode_terc4_t4d_bch4_read());
+		} else if (strcmp(token, "align") == 0 ) {
+		  int fp = strtol(get_token(&str), NULL, 0);
+		  hdmi_core_out0_dma_line_align_write(fp);
+		  printf( "set line alignmnent position to %d\n", fp );
 		} else {
 		  help_debug();
 		}

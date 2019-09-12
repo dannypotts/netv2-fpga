@@ -48,6 +48,9 @@ from migen.genlib.cdc import MultiReg
 from litex.soc.cores import spi_flash
 from litex.soc.integration.soc_core import mem_decoder
 
+from litevideo.csc.rgb2ycbcr import rgb2ycbcr_coefs, RGB2YCbCr, RGB2YCbCrDatapath
+from litevideo.csc.common import *
+
 _io = [
     ("clk50", 0, Pins("J19"), IOStandard("LVCMOS33")),
 
@@ -145,35 +148,6 @@ _io = [
         Subsignal("hpd_notif", Pins("U17"), IOStandard("LVCMOS33"), Inverted()),  # HDMI_HPD_LL_N (note active low)
     ),
 
-    # Use this block if connecting a normal HDMI cable to the overlay port
-    # ("hdmi_in", 1,
-    #     Subsignal("clk_p", Pins("Y18"), IOStandard("TMDS_33"), Inverted()),
-    #     Subsignal("clk_n", Pins("Y19"), IOStandard("TMDS_33"), Inverted()),
-    #     Subsignal("data0_p", Pins("AA18"), IOStandard("TMDS_33")),
-    #     Subsignal("data0_n", Pins("AB18"), IOStandard("TMDS_33")),
-    #     Subsignal("data1_p", Pins("AA19"), IOStandard("TMDS_33"), Inverted()),
-    #     Subsignal("data1_n", Pins("AB20"), IOStandard("TMDS_33"), Inverted()),
-    #     Subsignal("data2_p", Pins("AB21"), IOStandard("TMDS_33"), Inverted()),
-    #     Subsignal("data2_n", Pins("AB22"), IOStandard("TMDS_33"), Inverted()),
-    #     Subsignal("scl", Pins("W17"), IOStandard("LVCMOS33"), Inverted()),
-    #     Subsignal("sda", Pins("R17"), IOStandard("LVCMOS33")),
-    # ),
-
-    # Use this block if connecting the M2M jumper to the Raspberry Pi
-    # All pairs inverted to simplify/clean-up routing between the two boards
-    ("hdmi_in", 1,
-     Subsignal("clk_p", Pins("Y18"), IOStandard("TMDS_33")),
-     Subsignal("clk_n", Pins("Y19"), IOStandard("TMDS_33")),
-     Subsignal("data0_p", Pins("AA18"), IOStandard("TMDS_33"), Inverted()),
-     Subsignal("data0_n", Pins("AB18"), IOStandard("TMDS_33"), Inverted()),
-     Subsignal("data1_p", Pins("AA19"), IOStandard("TMDS_33")),
-     Subsignal("data1_n", Pins("AB20"), IOStandard("TMDS_33")),
-     Subsignal("data2_p", Pins("AB21"), IOStandard("TMDS_33")),
-     Subsignal("data2_n", Pins("AB22"), IOStandard("TMDS_33")),
-     Subsignal("scl", Pins("W17"), IOStandard("LVCMOS33"), Inverted()),
-     Subsignal("sda", Pins("R17"), IOStandard("LVCMOS33")),
-     ),
-
     ("hdmi_out", 0,
         Subsignal("clk_p", Pins("W19"), Inverted(), IOStandard("TMDS_33")),
         Subsignal("clk_n", Pins("W20"), Inverted(), IOStandard("TMDS_33")),
@@ -244,15 +218,52 @@ _io = [
 
 
 class Platform(XilinxPlatform):
-    def __init__(self, toolchain="vivado", programmer="vivado", part="35"):
+    def __init__(self, toolchain="vivado", programmer="vivado", part="35", cable="pcb"):
         part = "xc7a" + part + "t-fgg484-2"
-        XilinxPlatform.__init__(self, part, _io,
+
+        io = _io
+
+        if (cable == "pcb"):
+            io += [
+                # Use this block if connecting the M2M jumper to the Raspberry Pi
+                # All pairs inverted to simplify/clean-up routing between the two boards
+                ("hdmi_in", 1,
+                 Subsignal("clk_p", Pins("Y18"), IOStandard("TMDS_33")),
+                 Subsignal("clk_n", Pins("Y19"), IOStandard("TMDS_33")),
+                 Subsignal("data0_p", Pins("AA18"), IOStandard("TMDS_33"), Inverted()),
+                 Subsignal("data0_n", Pins("AB18"), IOStandard("TMDS_33"), Inverted()),
+                 Subsignal("data1_p", Pins("AA19"), IOStandard("TMDS_33")),
+                 Subsignal("data1_n", Pins("AB20"), IOStandard("TMDS_33")),
+                 Subsignal("data2_p", Pins("AB21"), IOStandard("TMDS_33")),
+                 Subsignal("data2_n", Pins("AB22"), IOStandard("TMDS_33")),
+                 Subsignal("scl", Pins("W17"), IOStandard("LVCMOS33"), Inverted()),
+                 Subsignal("sda", Pins("R17"), IOStandard("LVCMOS33")),
+                 )
+            ]
+        else:
+            io += [
+                # Use this block if connecting a normal HDMI cable to the overlay port
+                ("hdmi_in", 1,
+                 Subsignal("clk_p", Pins("Y18"), IOStandard("TMDS_33"), Inverted()),
+                 Subsignal("clk_n", Pins("Y19"), IOStandard("TMDS_33"), Inverted()),
+                 Subsignal("data0_p", Pins("AA18"), IOStandard("TMDS_33")),
+                 Subsignal("data0_n", Pins("AB18"), IOStandard("TMDS_33")),
+                 Subsignal("data1_p", Pins("AA19"), IOStandard("TMDS_33"), Inverted()),
+                 Subsignal("data1_n", Pins("AB20"), IOStandard("TMDS_33"), Inverted()),
+                 Subsignal("data2_p", Pins("AB21"), IOStandard("TMDS_33"), Inverted()),
+                 Subsignal("data2_n", Pins("AB22"), IOStandard("TMDS_33"), Inverted()),
+                 Subsignal("scl", Pins("W17"), IOStandard("LVCMOS33"), Inverted()),
+                 Subsignal("sda", Pins("R17"), IOStandard("LVCMOS33")),
+                 ),
+            ]
+
+        XilinxPlatform.__init__(self, part, io,
                                 toolchain=toolchain)
 
         # NOTE: to do quad-SPI mode, the QE bit has to be set in the SPINOR status register
         # OpenOCD won't do this natively, have to find a work-around (like using iMPACT to set it once)
         self.add_platform_command(
-            "set_property CONFIG_VOLTAGE 3.3 [current_design]")
+        "set_property CONFIG_VOLTAGE 3.3 [current_design]")
         self.add_platform_command(
             "set_property CFGBVS VCCO [current_design]")
         self.add_platform_command(
@@ -551,6 +562,7 @@ class BaseSoC(SoCSDRAM):
             ident="NeTV2 LiteX Base SoC",
             reserve_nmi_interrupt=False,
             cpu_type="vexriscv",
+            csr_address_width=17,
 #            cpu_variant="debug",
             **kwargs)
 
@@ -712,11 +724,16 @@ class RectOpening(Module, AutoCSR):
         self.hrect_end = CSRStorage(12)
         self.vrect_start = CSRStorage(12)
         self.vrect_end = CSRStorage(12)
-        self.rect_thresh = CSRStorage(8)
 
         self.pipe_override = CSRStorage(1)
 
-        self.rect_on = Signal()
+        self.chroma_key_hi = CSRStorage(24, reset=0xffffff)
+        self.chroma_key_lo = CSRStorage(24, reset=0x141414)
+        self.chroma_polarity = CSRStorage(1)
+        self.chroma_mode = CSRStorage(1)
+
+        self.rect_on = Signal()   # the computed rectangle opening
+        self.rect_enable = CSRStorage(1)  # enables the rectangle function
 
         # counter for pixel position based on the incoming HDMI0 stream.
         # use this instead of programmed values because we want to sync to non-compliant data streams
@@ -797,6 +814,7 @@ class VideoOverlaySoC(BaseSoC):
     interrupt_map = {
         "hdmi_in1": 3,
         "hdcp" : 4,
+        "hdmi_in0": 5,
     }
     interrupt_map.update(BaseSoC.interrupt_map)
 
@@ -815,9 +833,9 @@ class VideoOverlaySoC(BaseSoC):
 
         ########## hdmi in 0 (raw tmds)
         hdmi_in0_pads = platform.request("hdmi_in", 0)
-        self.submodules.hdmi_in0_freq = FrequencyMeter(period=self.clk_freq)
+        self.submodules.hdmi_in0_freq = FrequencyMeter(period=int(self.clk_freq/10))  # need to converge this faster
         self.submodules.hdmi_in0 = hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7", split_mmcm=True, hdmi=True, iodelay_clk_freq=iodelay_clk_freq, alt_delay=True)
-        self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix.clk)
+        self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix_raw.clk) # pick from "raw" so PLL lock isn't in the way of freq detection
         # don't add clock timings here, we add a root clock constraint that derives the rest automatically
 
         # define path constraints individually to sysclk to avoid accidentally declaring other inter-clock paths as false paths
@@ -840,6 +858,11 @@ class VideoOverlaySoC(BaseSoC):
         self.platform.add_false_path_constraints(
             self.crg.cd_sys.clk,
             self.hdmi_in0.clocking.cd_pix5x_o.clk
+        )
+        # false timing path for the frequency meter on hdmi in 0
+        self.platform.add_false_path_constraints(
+            self.hdmi_in0.clocking.cd_pix_raw.clk,
+            self.crg.cd_sys.clk
         )
 
         hdmi_out0_pads = platform.request("hdmi_out", 0)  ## TODO: pull latest litevideo and re-validate pix_o mapping
@@ -953,109 +976,6 @@ class VideoOverlaySoC(BaseSoC):
                 "create_clock -period " + str(input_clock_period) + " -name " + input_clock + str(i) + " [get_ports ddram_dqs_p[" + str(i) + "] ]"
             )
 
-        """
-        ### Constrain the output DQS-to-data relationship so the DRAM data is centered correctly
-        #  Double Data Rate Source Synchronous Outputs
-        #
-        #  Source synchronous output interfaces can be constrained either by the max data skew
-        #  relative to the generated clock or by the destination device setup/hold requirements.
-        #
-        #  Setup/Hold Case:
-        #  Setup and hold requirements for the destination device and board trace delays are known.
-        #
-        # forwarded                        _________________________________
-        # clock                 __________|                                 |______________
-        #                                 |                                 |
-        #                           tsu_r |  thd_r                    tsu_f | thd_f
-        #                         <------>|<------->                <------>|<----->
-        #                         ________|_________                ________|_______
-        # data @ destination   XXX__________________XXXXXXXXXXXXXXXX________________XXXXX
-        #
-        # Example of creating generated clock at clock output port
-        # create_generated_clock -name <gen_clock_name> -multiply_by 1 -source [get_pins <source_pin>] [get_ports <output_clock_port>]
-        # gen_clock_name is the name of forwarded clock here. It should be used below for defining "fwclk".
-
-        # report_timing -rise_to [get_ports ddram_dq] -max_paths 20 -nworst 2 -delay_type min_max -name src_sync_ddr_out_rise
-        # report_timing -fall_to [get_ports ddram_dq] -max_paths 20 -nworst 2 -delay_type min_max -name src_sync_ddr_out_fall
-
-        tsu_r = 10.0 / 1000  # vivado units in ns, datasheet units in ps
-        thd_r = 45.0 / 1000
-        tsu_f = 10.0 / 1000
-        thd_f = 45.0 / 1000
-        trce_dly_max = 0.000  # maximum board trace delay
-        trce_dly_min = 0.000  # minimum board trace delay
-        output_ports = []
-        for i in range(0,32):
-            output_ports.append('ddram_dq[' + str(i) + ']')
-
-        # Output Delay Constraints
-        for i in range(0,32):
-            self.platform.add_platform_command(
-                "set_output_delay -clock soc_videooverlaysoc_videooverlaysoc_crg_pll_sys4x_dqs -max " + str(trce_dly_max + tsu_r) + " [get_ports " + output_ports[i] + "]"
-            )
-            self.platform.add_platform_command(
-                "set_output_delay -clock soc_videooverlaysoc_videooverlaysoc_crg_pll_sys4x_dqs -min " + str(trce_dly_min + thd_r) + " [get_ports " + output_ports[i] + "]"
-            )
-            self.platform.add_platform_command(
-                "set_output_delay -clock soc_videooverlaysoc_videooverlaysoc_crg_pll_sys4x_dqs -max " + str(trce_dly_max + tsu_f) + " [get_ports " + output_ports[i] + "] -clock_fall -add_delay"
-            )
-            self.platform.add_platform_command(
-                "set_output_delay -clock soc_videooverlaysoc_videooverlaysoc_crg_pll_sys4x_dqs -min " + str(trce_dly_min + thd_f) + " [get_ports " + output_ports[i] + "] -clock_fall -add_delay"
-            )
-        """
-
-        """     # We don't need these constraints because we calibrate this delay on boot
-
-        # Center-Aligned Double Data Rate Source Synchronous Inputs
-        #
-        # For a center-aligned Source Synchronous interface, the clock
-        # transition is aligned with the center of the data valid window.
-        # The same clock edge is used for launching and capturing the
-        # data. The constraints below rely on the default timing
-        # analysis (setup = 1/2 cycle, hold = 0 cycle).
-        #
-        # input                  ____________________
-        # clock    _____________|                    |_____________
-        #                       |                    |
-        #                dv_bre | dv_are      dv_bfe | dv_afe
-        #               <------>|<------>    <------>|<------>
-        #          _    ________|________    ________|________    _
-        # data     _XXXX____Rise_Data____XXXX____Fall_Data____XXXX_
-        #
-
-        # Report Timing template
-        # report_timing -rise_from [get_ports ddram_dq] -max_paths 20 -nworst 2 -delay_type min_max -name src_sync_cntr_ddr_in_rise
-        # report_timing -fall_from [get_ports ddram_dq] -max_paths 20 -nworst 2 -delay_type min_max -name src_sync_cntr_ddr_in_fall
-
-        input_clock = "dqsin"     # Name of input clock
-        input_clock_period = 2.5  # Period of input clock (full-period)
-        for i in range(0,4):
-            self.platform.add_platform_command(
-                "create_clock -period " + str(input_clock_period) + " -name " + input_clock + str(i) + " [get_ports ddram_dqs_p[" + str(i) + "] ]"
-            )
-
-        dv_bre = (input_clock_period/2) - 100.0 / 10000 # Data valid before the rising clock edge
-        dv_are = (input_clock_period/2) * 0.38
-        dv_bfe = (input_clock_period/2) - 100.0 / 10000 # Data valid before the falling clock edge
-        dv_afe = (input_clock_period/2) * 0.38 # Data valid after the falling clock edge
-        input_ports = "ddram_dq"  # List of input ports
-
-        # Input Delay Constraint
-        for i in range(0, 32):
-            self.platform.add_platform_command(
-                "set_input_delay -clock " + input_clock + str(i//8) + " -max " + str(input_clock_period/2 - dv_bfe) + " [get_ports ddram_dq[" + str(i) +"] ]"
-            )
-            self.platform.add_platform_command(
-                "set_input_delay -clock " + input_clock + str(i//8) + " -min " + str(dv_are) + " [get_ports ddram_dq[" + str(i) + "] ]"
-            )
-            self.platform.add_platform_command(
-                "set_input_delay -clock " + input_clock + str(i//8) + " -max " + str(input_clock_period/2 - dv_bre) + " [get_ports ddram_dq[" + str(i) + "] ] -clock_fall -add_delay"
-            )
-            self.platform.add_platform_command(
-                "set_input_delay -clock " + input_clock + str(i//8) + " -min " + str(dv_afe) + " [get_ports ddram_dq[" + str(i) + "] ] -clock_fall -add_delay"
-            )
-        """
-
         ###############  hdmi out 1 (overlay rgb)
 
         out_dram_port = self.sdram.crossbar.get_port(mode="read", clock_domain="pix_o", data_width=32, reverse=True)
@@ -1088,6 +1008,31 @@ class VideoOverlaySoC(BaseSoC):
             # the output records are directly consumed down below
         ]
 
+        ### YCbCr converter
+        rgb2ycbcr = RGB2YCbCr()
+        self.submodules.rgb2ycbcr = rgb2ycbcr = ClockDomainsRenamer("pix_o")(rgb2ycbcr)
+        self.comb += [
+            self.rgb2ycbcr.sink.payload.b.eq(core_source_data_d[0:8]),
+            self.rgb2ycbcr.sink.payload.g.eq(core_source_data_d[8:16]),
+            self.rgb2ycbcr.sink.payload.r.eq(core_source_data_d[16:24]),
+            self.rgb2ycbcr.sink.valid.eq(1),
+            self.rgb2ycbcr.source.ready.eq(1),
+        ]
+        # YCrCb PATH:
+        #    RGB overlay video => CSC   => YCrCb overlay video
+        #                     |=> delay => RGB overlay video (synced to YCrCb video)
+        #    RGB passthrough video => compare chroma against RGB overlay video synced to YCrCb video
+        # create delayed version of the RGB so we can do the comparison against the background pixels
+        timing_csc_delay = TimingDelayRGB(4 + RGB2YCbCrDatapath.latency)
+        timing_csc_delay = ClockDomainsRenamer("pix_o")(timing_csc_delay)
+        self.submodules += timing_csc_delay
+        self.hdmi_out0_rgb_csc = hdmi_out0_rgb_csc = stream.Endpoint(rgb_layout)
+        self.comb += [
+            timing_csc_delay.sink.eq(hdmi_out0_rgb),
+            hdmi_out0_rgb_csc.eq(timing_csc_delay.source),
+        ]
+
+
         ##### HDCP engine
         platform.add_source(os.path.join("overlay", "i2c_snoop.v"))
         platform.add_source(os.path.join("overlay", "diff_network.v"))
@@ -1119,15 +1064,30 @@ class VideoOverlaySoC(BaseSoC):
         self.submodules.encoder_grn = encoder_grn = ClockDomainsRenamer("pix_o")(Encoder())
         self.submodules.encoder_blu = encoder_blu = ClockDomainsRenamer("pix_o")(Encoder())
 
+        self.submodules.rectangle = rectangle = ClockDomainsRenamer("pix_o")(RectOpening(hdmi_in0_timing))
+
+        # pick encoder source: YCrCb or RGB path
         self.comb += [
-            If(hdcp.Km_valid.storage,  # this is a proxy for HDCP being initialized
-               encoder_red.d.eq(hdmi_out0_rgb.r ^ hdcp.cipher_stream[16:]), # 23:16
-               encoder_grn.d.eq(hdmi_out0_rgb.g ^ hdcp.cipher_stream[8:16]),  # 15:8
-               encoder_blu.d.eq( (hdmi_out0_rgb.b ^ hdcp.cipher_stream[0:8])),  # 7:0
-               ).Else(
-                encoder_red.d.eq(hdmi_out0_rgb.r),
-                encoder_grn.d.eq(hdmi_out0_rgb.g),
-                encoder_blu.d.eq(hdmi_out0_rgb.b),
+            If(rectangle.chroma_mode.storage,  # pull from YCrCb path
+               If(hdcp.Km_valid.storage,  # this is a proxy for HDCP being initialized
+                  encoder_red.d.eq(self.rgb2ycbcr.source.cr ^ hdcp.cipher_stream[16:]),  # 23:16
+                  encoder_grn.d.eq(self.rgb2ycbcr.source.y ^ hdcp.cipher_stream[8:16]),  # 15:8
+                  encoder_blu.d.eq((self.rgb2ycbcr.source.cb ^ hdcp.cipher_stream[0:8])),  # 7:0
+                  ).Else(
+                   encoder_red.d.eq(self.rgb2ycbcr.source.cr),   # channel 2
+                   encoder_grn.d.eq(self.rgb2ycbcr.source.y),  # channel 1
+                   encoder_blu.d.eq(self.rgb2ycbcr.source.cb),  # channel 0
+               ),
+            ).Else( # pull from RGB path
+                If(hdcp.Km_valid.storage,  # this is a proxy for HDCP being initialized
+                   encoder_red.d.eq(hdmi_out0_rgb.r ^ hdcp.cipher_stream[16:]), # 23:16
+                   encoder_grn.d.eq(hdmi_out0_rgb.g ^ hdcp.cipher_stream[8:16]),  # 15:8
+                   encoder_blu.d.eq( (hdmi_out0_rgb.b ^ hdcp.cipher_stream[0:8])),  # 7:0
+                   ).Else(
+                    encoder_red.d.eq(hdmi_out0_rgb.r),
+                    encoder_grn.d.eq(hdmi_out0_rgb.g),
+                    encoder_blu.d.eq(hdmi_out0_rgb.b),
+                ),
             ),
             encoder_red.de.eq(1),
             encoder_red.c.eq(0), # we promise to use this only during video areas, so "c" is always 0
@@ -1139,54 +1099,79 @@ class VideoOverlaySoC(BaseSoC):
             encoder_blu.c.eq(0),
         ]
 
-        # hdmi in to hdmi out
+        # hdmi in to hdmi out delay -- match pixel processing pipeline depth (necessary to get HDCP to line up)
         c0_pix_o = Signal(10)
         c1_pix_o = Signal(10)
         c2_pix_o = Signal(10)
+        stream_de_pix_o = Signal()
         c0 = Signal(10)
         c1 = Signal(10)
         c2 = Signal(10)
+        stream_de = Signal()
         self.comb += [
             c0.eq(self.hdmi_in0.syncpol.c0),
             c1.eq(self.hdmi_in0.syncpol.c1),
             c2.eq(self.hdmi_in0.syncpol.c2),
+            stream_de.eq(self.hdmi_in0.syncpol.de_int),
         ]
         for i in range(6): # either 5 or 6; 5 if the first pixel is encrypted by the idle cipher; 6 if the cipher has to be pumped before encryption
             c0_next = Signal(10)
             c1_next = Signal(10)
             c2_next = Signal(10)
+            stream_de_next = Signal()
             self.sync.pix_o += [  # extra delay to absorb cross-domain jitter & routing
                 c0_next.eq(c0),
                 c1_next.eq(c1),
                 c2_next.eq(c2),
+                stream_de_next.eq(stream_de),
             ]
             c0 = c0_next
             c1 = c1_next
             c2 = c2_next
+            stream_de = stream_de_next
 
         self.sync.pix_o += [  # extra delay to absorb cross-domain jitter & routing
             c0_pix_o.eq(c0_next),
             c1_pix_o.eq(c1_next),
-            c2_pix_o.eq(c2_next)
+            c2_pix_o.eq(c2_next),
+            stream_de_pix_o.eq(stream_de_next)
         ]
 
+        ######  CHROMA computation and pixel swapping
         rect_on = Signal()
-        rect_thresh = Signal(8)
 
-        self.submodules.rectangle = rectangle = ClockDomainsRenamer("pix_o")( RectOpening(hdmi_in0_timing) )
-        self.comb += rect_on.eq(rectangle.rect_on)
-        self.comb += rect_thresh.eq(rectangle.rect_thresh.storage)
-
-        self.sync.pix_o += [
-            If(rectangle.pipe_override.storage,
-                 self.hdmi_out0_phy.sink.c0.eq(self.hdmi_in0.data0_cap.d),
-                 self.hdmi_out0_phy.sink.c1.eq(self.hdmi_in0.data1_cap.d),
-                 self.hdmi_out0_phy.sink.c2.eq(self.hdmi_in0.data2_cap.d),
-            ).Elif(rect_on & (hdmi_out0_rgb_d.r >= rect_thresh) & (hdmi_out0_rgb_d.g >= rect_thresh) & (hdmi_out0_rgb_d.b >= rect_thresh),
+        chlo = Signal(24)
+        chhi = Signal(24)
+        chpol = Signal(1)
+        chmode = Signal(1)
+        # skip the final pipe to line up de against the actual video stream
+        self.comb += rect_on.eq(stream_de_pix_o & (~rectangle.rect_enable.storage | rectangle.rect_on))  # let's only do overlay when DE is active on the passthrough stream
+        self.sync.pix_o += [ # overlay video selected
+            chpol.eq(rectangle.chroma_polarity.storage),
+            chlo.eq(rectangle.chroma_key_lo.storage),
+            chhi.eq(rectangle.chroma_key_hi.storage),
+            chmode.eq(rectangle.chroma_mode.storage),
+            If(chmode & rect_on & (chpol ^
+                         ((hdmi_out0_rgb_csc.r >= chlo[:8]) &
+                          (hdmi_out0_rgb_csc.g >= chlo[8:16]) &
+                          (hdmi_out0_rgb_csc.b >= chlo[16:24]) &
+                          (hdmi_out0_rgb_csc.r <= chhi[:8]) &
+                          (hdmi_out0_rgb_csc.g <= chhi[8:16]) &
+                          (hdmi_out0_rgb_csc.b <= chhi[16:24]))),
+               self.hdmi_out0_phy.sink.c0.eq(encoder_blu.out),
+               self.hdmi_out0_phy.sink.c1.eq(encoder_grn.out),
+               self.hdmi_out0_phy.sink.c2.eq(encoder_red.out),
+            ).Elif(~chmode & rect_on & (chpol ^
+                         ((hdmi_out0_rgb_d.r >= chlo[:8]) &
+                          (hdmi_out0_rgb_d.g >= chlo[8:16]) &
+                          (hdmi_out0_rgb_d.b >= chlo[16:24]) &
+                          (hdmi_out0_rgb_d.r <= chhi[:8]) &
+                          (hdmi_out0_rgb_d.g <= chhi[8:16]) &
+                          (hdmi_out0_rgb_d.b <= chhi[16:24]))),
                     self.hdmi_out0_phy.sink.c0.eq(encoder_blu.out),
                     self.hdmi_out0_phy.sink.c1.eq(encoder_grn.out),
                     self.hdmi_out0_phy.sink.c2.eq(encoder_red.out),
-            ).Else(
+            ).Else( # background video selected
                     self.hdmi_out0_phy.sink.c0.eq(c0_pix_o),
                     self.hdmi_out0_phy.sink.c1.eq(c1_pix_o),
                     self.hdmi_out0_phy.sink.c2.eq(c2_pix_o),
@@ -1253,26 +1238,22 @@ class VideoOverlaySoC(BaseSoC):
         from litescope import LiteScopeAnalyzer
 
         analyzer_signals = [
-            self.hdmi_in0.use_alt_bond,
-            self.hdmi_in0.syncpol.data_in0,
-            self.hdmi_in0.syncpol.valid_i,
-            self.hdmi_in0.syncpol.de,
-            self.hdmi_in0.syncpol.vsync,
-            c0_pix_o,
-            c1_pix_o,
-            c2_pix_o,
-            encoder_blu.out,
-            encoder_grn.out,
-            encoder_red.out,
+            self.hdmi_in1.frame.de,
+            self.hdmi_in1.frame.valid_i,
+            self.hdmi_in1.frame.r,
+            self.hdmi_in1.frame.g,
+            self.hdmi_in1.frame.b,
+            self.hdmi_in1.dma.current_address,
+            self.hdmi_in1.dma._bus_accessor.sink.valid,
         ]
         self.platform.add_false_path_constraints( # for I2C snoop -> HDCP, and also covers logic analyzer path when configured
            self.crg.cd_eth.clk,
            self.hdmi_in0.clocking.cd_pix_o.clk
         )
         # WHEN NOT USING ANALYZER, COMMENT OUT FOR FASTER COMPILE TIMES
-#        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 64, clock_domain="hdmi_in0_pix", trigger_depth=8)
-#    def do_exit(self, vns):
-#        self.analyzer.export_csv(vns, "test/analyzer.csv")
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 64, clock_domain="hdmi_in1_pix", trigger_depth=8)
+    def do_exit(self, vns):
+        self.analyzer.export_csv(vns, "test/analyzer.csv")
 
 """     # just to remember some ways to debug/combine data
         pix_aggregate = Signal(24)
@@ -1304,9 +1285,12 @@ def main():
     parser.add_argument(
         "-d", "--dqsphase", help="set DQS phase offset", choices=["45.0", "67.5", "90.0", "112.5", "135.0", "157.5", "180.0"], default="112.5"
     )
+    parser.add_argument(
+        "-c", "--cable", help="select overlay cabling type", choices=["pcb", "cable"], default="pcb"
+    )
     args = parser.parse_args()
 
-    platform = Platform(part=args.part)
+    platform = Platform(part=args.part, cable=args.cable)
     if args.target == "base":
         soc = BaseSoC(platform)
     elif args.target == "video_overlay":

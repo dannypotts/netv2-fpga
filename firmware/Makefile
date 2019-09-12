@@ -26,7 +26,8 @@ OBJECTS=isr.o \
 		dump.o \
                 km.o \
                 compute_ksv.o \
-		stdio_wrap.o
+		stdio_wrap.o \
+                uptime.o
 
 CFLAGS += -I.
 

@@ -56,6 +56,7 @@ int main(void)
 	while(1) {
 	  processor_service();
 	  ci_service();
+	  uptime_service();
 
 	  // put a delay of a few seconds before releasing HPD
 	  if( waiting ) {
