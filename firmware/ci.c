@@ -289,7 +289,7 @@ static void json_print(void) {
 
   wprintf( "\"hdmi_Rx_hres\" : %d, ", hdmi_in0_resdetection_hres_read() );
   wprintf( "\"hdmi_Rx_vres\" : %d, ", hdmi_in0_resdetection_vres_read() );
-  wprintf( "\"hdmi_Rx_pixel_clock\" : %d, ", hdmi_in0_freq_value_read());
+  wprintf( "\"hdmi_Rx_pixel_clock\" : %d, ", hdmi_in0_freq_value_read()*10); // modded to converge faster
 
   hdmi_in0_data0_wer_update_write(1);
   hdmi_in0_data1_wer_update_write(1);
@@ -355,8 +355,8 @@ static void status_print(void)
 		hdmi_in0_resdetection_hres_read(),
 		hdmi_in0_resdetection_vres_read());
 #ifdef CSR_HDMI_IN0_FREQ_BASE
-	wprintf(" (@ %3d.%2d MHz)", hdmi_in0_freq_value_read() / 1000000,
-		                        (hdmi_in0_freq_value_read() / 10000) % 100);
+	wprintf(" (@ %3d.%2d MHz)", hdmi_in0_freq_value_read() * 10 / 1000000,
+		                        (hdmi_in0_freq_value_read() * 10 / 10000) % 100);
 #endif
 	wprintf("\r\n");
 #endif

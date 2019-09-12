@@ -562,7 +562,7 @@ class BaseSoC(SoCSDRAM):
             ident="NeTV2 LiteX Base SoC",
             reserve_nmi_interrupt=False,
             cpu_type="vexriscv",
-            csr_address_width=16,
+            csr_address_width=17,
 #            cpu_variant="debug",
             **kwargs)
 
@@ -833,7 +833,7 @@ class VideoOverlaySoC(BaseSoC):
 
         ########## hdmi in 0 (raw tmds)
         hdmi_in0_pads = platform.request("hdmi_in", 0)
-        self.submodules.hdmi_in0_freq = FrequencyMeter(period=self.clk_freq)
+        self.submodules.hdmi_in0_freq = FrequencyMeter(period=int(self.clk_freq/10))  # need to converge this faster
         self.submodules.hdmi_in0 = hdmi_in0 = HDMIIn(hdmi_in0_pads, device="xc7", split_mmcm=True, hdmi=True, iodelay_clk_freq=iodelay_clk_freq, alt_delay=True)
         self.comb += self.hdmi_in0_freq.clk.eq(self.hdmi_in0.clocking.cd_pix_raw.clk) # pick from "raw" so PLL lock isn't in the way of freq detection
         # don't add clock timings here, we add a root clock constraint that derives the rest automatically

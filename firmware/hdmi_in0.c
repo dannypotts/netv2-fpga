@@ -9,6 +9,7 @@
 #include <generated/csr.h>
 #include <generated/mem.h>
 #include "flags.h"
+#include "uptime.h"
 
 #ifdef CSR_HDMI_IN0_BASE
 
@@ -56,6 +57,17 @@ extern void processor_update(void);
 
 static int has_converged = 1;
 static int converged_phase[3] = {2,-16,-16};
+
+static int link_uptime = 0;
+
+#define MODE_1080p 0
+#define MODE_1080i 1
+#define MODE_720p  2
+
+#define PLL_HIGH 0
+#define PLL_LOW  1
+static int hdmi_in0_mode = MODE_1080p;
+static int hdmi_in0_pll = PLL_HIGH;
 
 static int hdmi_in0_compute_auto_bt_val(int bit_rate_value) {
   int del_mech = 1;
@@ -226,6 +238,36 @@ void hdmi_in0_isr(void)
 static int hdmi_in0_connected;
 int hdmi_in0_locked;
 
+void hdmi_in0_init_video_freq(int freq) {
+  if( idelay_freq == 400000000 ) {
+    iodelay_tap_duration = 39;
+  } else if( idelay_freq == 300000000 ) {
+    iodelay_tap_duration = 52;
+  } else {
+    iodelay_tap_duration = 78;
+  }
+  printf( "idelay_freq = %d\n", idelay_freq );
+  
+  hdmi_in0_clocking_mmcm_reset_write(1);
+  hdmi_in0_connected = hdmi_in0_locked = 0;
+  
+  int bit_time = hdmi_in0_compute_auto_bt_val( freq / 10 );
+  printf( "hdmi_in0: setting algo 2 eye time to %d IDELAY periods\n", bit_time );
+  hdmi_in0_data0_cap_eye_bit_time_write(bit_time);
+  hdmi_in0_data1_cap_eye_bit_time_write(bit_time);
+  hdmi_in0_data2_cap_eye_bit_time_write(bit_time);
+  
+  hdmi_in0_data0_cap_algorithm_write(2); // 1 is just delay criteria change, 2 is auto-delay machine
+  hdmi_in0_data1_cap_algorithm_write(2);
+  hdmi_in0_data2_cap_algorithm_write(2);
+  hdmi_in0_algorithm = 2;
+  hdmi_in0_data0_cap_auto_ctl_write(HDMI_IN0_AUTO_CTL_DEFAULT);
+  hdmi_in0_data1_cap_auto_ctl_write(HDMI_IN0_AUTO_CTL_DEFAULT);
+  hdmi_in0_data2_cap_auto_ctl_write(HDMI_IN0_AUTO_CTL_DEFAULT);
+  
+  link_uptime = uptime_ms();
+}
+
 void hdmi_in0_init_video(int hres, int vres, int freq)
 {
 	if( idelay_freq == 400000000 ) {
@@ -293,7 +335,8 @@ void hdmi_in0_init_video(int hres, int vres, int freq)
 	hdmi_in0_data1_cap_auto_ctl_write(HDMI_IN0_AUTO_CTL_DEFAULT);
 	hdmi_in0_data2_cap_auto_ctl_write(HDMI_IN0_AUTO_CTL_DEFAULT);
 #endif
-	
+
+	link_uptime = uptime_ms();
 }
 
 void hdmi_in0_disable(void)
@@ -731,11 +774,71 @@ static int hdmi_in0_get_wer(void){
 
 static int trip_hpd = 0;
 
+static void guess_freq(void) {
+  int freq = hdmi_in0_freq_value_read() * 10;
+  printf( "hdmi_in0: measured clock %d\n", freq );
+  if( freq > 141000000 && freq < 150000000 ) {
+    if( hdmi_in0_pll == PLL_LOW ) {
+      printf( "hdmi_in0: changing to PLL_HIGH\n" );
+      hdmi_in_0_config_120_240mhz_table();
+      processor_set_hdmi_in0_pixclk(freq / 10000);
+      hdmi_in0_init_video_freq(freq);
+      hdmi_in0_pll = PLL_HIGH;
+    }
+  } else if( freq > 71000000 && freq < 76000000 ) {
+    if( hdmi_in0_pll == PLL_HIGH ) {
+      printf( "hdmi_in0: changing to PLL_LOW\n" );
+      hdmi_in_0_config_60_120mhz_table();
+      processor_set_hdmi_in0_pixclk(freq / 10000);
+      hdmi_in0_init_video_freq(freq);
+      hdmi_in0_pll = PLL_LOW;
+    }
+  }
+}
+
+static void guess_res(int lastres) {
+  int freq = hdmi_in0_freq_value_read() * 10;
+
+  // frequency should be stable now that resolution is stable...
+  if( freq > 141000000 && freq < 150000000 ) {
+    if( hdmi_in0_mode != MODE_1080p ) {
+      // 1080p
+      printf( "*** setting mode to 1080p ***\n" );
+      hdmi_in0_hres = 1920; hdmi_in0_vres = 1080;
+      init_rect(11, 0);
+      hdmi_core_out0_dma_interlace_write(0);
+      hdmi_in0_mode = MODE_1080p;
+    }
+  } else if( freq > 71000000 && freq < 76000000 ) {
+    if( lastres == 1920 ) {
+      // 1080i
+      printf( "*** setting mode to 1080i ***\n" ); // first guess 1080i
+      hdmi_in0_hres = 1920; hdmi_in0_vres = 1080;
+      init_rect(15, 2);
+      hdmi_core_out0_dma_field_pos_write(1320); // half of active + blank = (1920 + 720) / 2
+      hdmi_core_out0_dma_interlace_write(3);
+      hdmi_in0_mode = MODE_1080i;
+    } else if( lastres == 1280 ) {
+      printf( "*** setting mode to 720p ***\n" ); 
+      hdmi_in_0_config_60_120mhz_table();
+      processor_set_hdmi_in0_pixclk(freq / 10000);
+      hdmi_in0_hres = 1280; hdmi_in0_vres = 720;
+      init_rect(9, 1);
+      hdmi_core_out0_dma_interlace_write(0);
+      hdmi_in0_mode = MODE_720p;
+    }
+  }
+}
+
 void hdmi_in0_service(int freq)
 {
 	static int last_event;
 	static int last_hpd;
-
+	static int was_connected = 0;
+	static int clock_measured = 0;
+	static int rescount = 0;
+	static int lastres = 0;
+	
 	if( elapsed(&last_hpd, SYSTEM_CLOCK_FREQUENCY/2) ) {
 	  if( trip_hpd > 48 ) {
 	    hdcp_hpd_ena_write(1);
@@ -746,6 +849,16 @@ void hdmi_in0_service(int freq)
 	}
 
 	if(hdmi_in0_connected) {
+	  if( !was_connected ) {
+	    was_connected = 1;
+	    link_uptime = uptime_ms();
+	  }
+	  if( !clock_measured ) {
+	    if( uptime_ms() - link_uptime > 900 ) {
+	      clock_measured = 1;
+	      guess_freq();
+	    }
+	  }
 		if(!hdmi_in0_edid_hpd_notif_read()) {
 			if(hdmi_in0_debug)
 				printf("hdmi_in0: disconnected\r\n");
@@ -755,6 +868,17 @@ void hdmi_in0_service(int freq)
 			hdmi_in0_clear_framebuffers();
 		} else {
 			if(hdmi_in0_locked) {
+			  if( hdmi_in0_resdetection_hres_read() != lastres ) {
+			    lastres = hdmi_in0_resdetection_hres_read();
+			    rescount = 0;
+			  } else {
+			    rescount++;
+			  }
+
+			  if( rescount == 3 ) {
+			    guess_res(lastres);
+			  }
+			  
 				if(hdmi_in0_clocking_locked_filtered()) {
 					if(elapsed(&last_event, SYSTEM_CLOCK_FREQUENCY/16)) {
 					  hdmi_in0_data0_wer_update_write(1);
@@ -783,23 +907,12 @@ void hdmi_in0_service(int freq)
 					hdmi_in0_clear_framebuffers();
 				}
 
-#if 0				 // why doesn't this work??
-				if( hdmi_in0_data0_charsync_char_synced_read() &&
-				    (hdmi_in0_data0_charsync_ctl_pos_read() != 0) )
-				  hdmi_in0_data0_cap_searchreset_write(1);  // single bit, triggered only on write
-				if( hdmi_in0_data1_charsync_char_synced_read() &&
-				    (hdmi_in0_data1_charsync_ctl_pos_read() != 0) )
-				  hdmi_in0_data1_cap_searchreset_write(1);
-				if( hdmi_in0_data2_charsync_char_synced_read() &&
-				    (hdmi_in0_data2_charsync_ctl_pos_read() != 0) )
-				  hdmi_in0_data2_cap_searchreset_write(1);
-#endif
-				
 			} else {
 				if(hdmi_in0_clocking_locked_filtered()) {
 					if(hdmi_in0_debug)
 						printf("hdmi_in0: PLL locked\r\n");
 					hdmi_in0_phase_startup(freq);
+					clock_measured = 0;
 					if(hdmi_in0_debug)
 						hdmi_in0_print_status();
 					hdmi_in0_locked = 1;
@@ -807,6 +920,8 @@ void hdmi_in0_service(int freq)
 			}
 		}
 	} else {
+	  was_connected = 0;
+	  clock_measured = 0;
      	        trip_hpd = 0;
 		if(hdmi_in0_edid_hpd_notif_read()) {
 			if(hdmi_in0_debug)
