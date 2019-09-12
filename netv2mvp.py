@@ -732,7 +732,8 @@ class RectOpening(Module, AutoCSR):
         self.chroma_polarity = CSRStorage(1)
         self.chroma_mode = CSRStorage(1)
 
-        self.rect_on = Signal()
+        self.rect_on = Signal()   # the computed rectangle opening
+        self.rect_enable = CSRStorage(1)  # enables the rectangle function
 
         # counter for pixel position based on the incoming HDMI0 stream.
         # use this instead of programmed values because we want to sync to non-compliant data streams
@@ -1144,13 +1145,12 @@ class VideoOverlaySoC(BaseSoC):
         chpol = Signal(1)
         chmode = Signal(1)
         # skip the final pipe to line up de against the actual video stream
-        self.comb += rect_on.eq(stream_de_pix_o)  # let's only do overlay when DE is active on the passthrough stream
+        self.comb += rect_on.eq(stream_de_pix_o & (~rectangle.rect_enable.storage | rectangle.rect_on))  # let's only do overlay when DE is active on the passthrough stream
         self.sync.pix_o += [ # overlay video selected
             chpol.eq(rectangle.chroma_polarity.storage),
             chlo.eq(rectangle.chroma_key_lo.storage),
             chhi.eq(rectangle.chroma_key_hi.storage),
             chmode.eq(rectangle.chroma_mode.storage),
-#            rect_on.eq(rectangle.rect_on),  # rect_on defines the range of pixels considered for overlay swapping (avoid sync areas)
             If(chmode & rect_on & (chpol ^
                          ((hdmi_out0_rgb_csc.r >= chlo[:8]) &
                           (hdmi_out0_rgb_csc.g >= chlo[8:16]) &

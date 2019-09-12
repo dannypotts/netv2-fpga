@@ -725,10 +725,11 @@ void init_rect(int mode, int hack) {
     // ycrcb422 vs rgb
   }
 
-  int h_margin = 32;
-  int v_margin = 10;
+  rectangle_rect_enable_write(0); // setup the rectangle, but don't use it -- we are now using DE gating
+  int h_margin = 0; // cut off the white line on the right projected by magic mirror
+  int v_margin = 0;
   int rect_thresh = 20; // reasonable for magic mirror use, which is mostly a black UI
-  rectangle_hrect_start_write(h_margin);
+  rectangle_hrect_start_write(0);
   rectangle_hrect_end_write(m->h_active - h_margin);
   rectangle_vrect_start_write(v_margin);
   if( hack == 2 ) {
@@ -1077,13 +1078,16 @@ void ci_service(void)
 		} else if(strcmp(token, "setrect") == 0 ) {
 		  const struct video_timing *m = &video_modes[12];
 		  m = &video_modes[12];
-		  
+
+		  rectangle_rect_enable_write(1);
 		  rectangle_hrect_start_write((unsigned short) strtoul(get_token(&str), NULL, 0));
 		  rectangle_hrect_end_write((unsigned short) strtoul(get_token(&str), NULL, 0));
 		  // vblank on top of frame so compensate in offset
 		  rectangle_vrect_start_write((unsigned short) strtoul(get_token(&str), NULL, 0) + m->v_blanking ); 
 		  rectangle_vrect_end_write((unsigned short) strtoul(get_token(&str), NULL, 0) + m->v_blanking );
 		} else if(strcmp(token, "rectoff") == 0 ) {
+		  rectangle_rect_enable_write(0);
+		} else if(strcmp(token, "overlayoff") == 0 ) {
 		  hdmi_core_out0_initiator_enable_write(0);
 		} else if (strcmp(token, "delay") == 0) {
 		  hdmi_core_out0_dma_delay_base_write((unsigned int) strtoul(get_token(&str), NULL, 0));
@@ -1154,6 +1158,10 @@ void ci_service(void)
 		  printf( "hdmi0 terc4 bch3: 0x%08x%08x\n", (unsigned long) (hdmi_in0_decode_terc4_t4d_bch3_read() >> 32),
 			  (unsigned long) hdmi_in0_decode_terc4_t4d_bch3_read());
 		  printf( "hdmi0 terc4 bch4: 0x%08x\n", hdmi_in0_decode_terc4_t4d_bch4_read());
+		} else if (strcmp(token, "fp") == 0 ) {
+		  int fp = strtol(get_token(&str), NULL, 0);
+		  hdmi_core_out0_dma_field_pos_write(fp);
+		  printf( "set DMA field position to %d\n", fp );
 		} else {
 		  help_debug();
 		}
