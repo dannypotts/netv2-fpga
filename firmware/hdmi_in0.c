@@ -812,20 +812,24 @@ static void guess_res(int lastres) {
   } else if( freq > 71000000 && freq < 76000000 ) {
     if( lastres == 1920 ) {
       // 1080i
-      printf( "*** setting mode to 1080i ***\n" ); // first guess 1080i
-      hdmi_in0_hres = 1920; hdmi_in0_vres = 1080;
-      init_rect(15, 2);
-      hdmi_core_out0_dma_field_pos_write(1320); // half of active + blank = (1920 + 720) / 2
-      hdmi_core_out0_dma_interlace_write(3);
-      hdmi_in0_mode = MODE_1080i;
+      if( hdmi_in0_mode != MODE_1080i ) {
+	printf( "*** setting mode to 1080i ***\n" ); // first guess 1080i
+	hdmi_in0_hres = 1920; hdmi_in0_vres = 1080;
+	init_rect(15, 2);
+	hdmi_core_out0_dma_field_pos_write(1320); // half of active + blank = (1920 + 720) / 2
+	hdmi_core_out0_dma_interlace_write(3);
+	hdmi_in0_mode = MODE_1080i;
+      }
     } else if( lastres == 1280 ) {
-      printf( "*** setting mode to 720p ***\n" ); 
-      hdmi_in_0_config_60_120mhz_table();
-      processor_set_hdmi_in0_pixclk(freq / 10000);
-      hdmi_in0_hres = 1280; hdmi_in0_vres = 720;
-      init_rect(9, 1);
-      hdmi_core_out0_dma_interlace_write(0);
-      hdmi_in0_mode = MODE_720p;
+      if( hdmi_in0_mode != MODE_720p ) {
+	printf( "*** setting mode to 720p ***\n" ); 
+	hdmi_in_0_config_60_120mhz_table();
+	processor_set_hdmi_in0_pixclk(freq / 10000);
+	hdmi_in0_hres = 1280; hdmi_in0_vres = 720;
+	init_rect(9, 1);
+	hdmi_core_out0_dma_interlace_write(0);
+	hdmi_in0_mode = MODE_720p;
+      }
     }
   }
 }

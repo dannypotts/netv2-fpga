@@ -712,15 +712,19 @@ void init_rect(int mode, int hack) {
     printf( "initiator_length: %x\n", hdmi_core_out0_initiator_length_read() );
     //    hdmi_core_out0_initiator_length_write(1920 * 128); // 1920 hactive (incl skip) over 720 lines
 
-    hdmi_core_out0_dma_delay_base_write(14 * 4);
+    hdmi_core_out0_dma_line_align_write(1280 - 12 * 8 - 1); // 1183
+    hdmi_core_out0_dma_delay_base_write(0); // retire this parameter
+    
   } else if( hack == 2 ) {
     hdmi_core_out0_initiator_length_write(m->h_active* m->v_active *4);
-    hdmi_core_out0_dma_delay_base_write(30 * 4);  // this helps align the DMA transfer through various delay offsets
+    hdmi_core_out0_dma_line_align_write(1920 - 16 * 8 - 1);  // this helps align the DMA transfer through various delay offsets
+    hdmi_core_out0_dma_delay_base_write(0); // retire this parameter
 
     hdmi_core_out0_dma_vres_out_write(m->v_active - 2);
   } else {
     hdmi_core_out0_initiator_length_write(m->h_active*m->v_active*4);
-    hdmi_core_out0_dma_delay_base_write(30 * 4);  // this helps align the DMA transfer through various delay offsets
+    hdmi_core_out0_dma_line_align_write(1920 - 16 * 8 - 1);  // this helps align the DMA transfer through various delay offsets
+    hdmi_core_out0_dma_delay_base_write(0); // retire this parameter
     // empricially determined, will shift around depending on what you do in the overlay video pipe, e.g.
     // ycrcb422 vs rgb
   }
@@ -1158,10 +1162,10 @@ void ci_service(void)
 		  printf( "hdmi0 terc4 bch3: 0x%08x%08x\n", (unsigned long) (hdmi_in0_decode_terc4_t4d_bch3_read() >> 32),
 			  (unsigned long) hdmi_in0_decode_terc4_t4d_bch3_read());
 		  printf( "hdmi0 terc4 bch4: 0x%08x\n", hdmi_in0_decode_terc4_t4d_bch4_read());
-		} else if (strcmp(token, "fp") == 0 ) {
+		} else if (strcmp(token, "align") == 0 ) {
 		  int fp = strtol(get_token(&str), NULL, 0);
-		  hdmi_core_out0_dma_field_pos_write(fp);
-		  printf( "set DMA field position to %d\n", fp );
+		  hdmi_core_out0_dma_line_align_write(fp);
+		  printf( "set line alignmnent position to %d\n", fp );
 		} else {
 		  help_debug();
 		}
