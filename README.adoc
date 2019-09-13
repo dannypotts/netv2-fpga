@@ -2,10 +2,12 @@
 
 Please check out the wiki (https://github.com/AlphamaxMedia/netv2-fpga/wiki) for more documentation on the NeTV2 project.
 
+## Updates
 Grab the latest update by first ensuring the NeTV2 is on the network, then plugging a keyboard and mouse into the NeTV2's USB ports and typing 'ctrl-q'. Double click the "Update FPGA" icon that appears on the left hand side of the screen. The screen should blank for about a minute, and then come back.
 
 As of September 2019, the latest update enables 1080p, 1080i, and 720p auto-resolution support, and you can also pick YCrCb chroma coding for the overlay. If your overlay shows up looking pink and green, this is likely the issue. You can pick YCrCb by logging into your NeTV2 via SSH and running the command ~/code/netv2mvp-scripts/set_ycrcb.sh. This command only appears after the latest update.
 
+## Hacking
 Note that the NeTV2 hardware uses torx screws exclusively. You will need a Torx T5 bit to open the case.
 
 If you're using the NeTV2 as "just a board" without the Raspberry Pi attached, please read https://github.com/AlphamaxMedia/netv2-fpga/wiki/Using-NeTV2-as-a-Dev-Board for more on how to use it.
