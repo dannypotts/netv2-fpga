@@ -27,7 +27,7 @@ These instructions can be used to quickly start FPGA development.
 1. Go to https://www.xilinx.com/member/forms/license-form.html, get a license, and place it in ~/.Xilinx/Xilinx.lic
 1. Run `./netv2mvp.py` (or `python3 ./netv2mvp.py`)
 
-## Updating ##
+### Source code update
 
 To update the repo to the upstream version, including all dependencies, run:
 
@@ -36,7 +36,7 @@ git pull
 git submodule update --recursive
 ```
 
-## Using lxbuildenv.py Environment ##
+### Using lxbuildenv.py Environment 
 
 `lxbuildenv` is a Python module.  It sets up the build environment and ensures you have the correct dependencies.  To use it, start your program off with:
 
@@ -61,7 +61,7 @@ In exchange for some deviation from other build environments, `lxbuildenv` gives
 1. It is cross-platform, and works anywhere Xilinx does.
 1. The `lxbuildenv` environment doesn't rely on opaque environment variables, or otherwise have a special environment you enter.  Everything is documented behind `--help` flags.
 
-## Working with Dependencies ##
+### Working with Dependencies 
 
 Dependencies are managed through `git`, and managing their usage is largely an exercise
 in working with `git`.
@@ -91,7 +91,7 @@ $ cd -
 
 Then you can go and open a Pull Request on Github.
 
-## Fetching Updates ##
+### Fetching Source Code Updates 
 
 Dependencies are designed to be independent, and you should update them as needed.  To update a particular
 dependency, go into that dependency's subdirectory and run `git pull`.  You may also find it easier to
@@ -107,7 +107,7 @@ $ cd -
 
 This will merge all changes from upstream onto your own branch.
 
-## Rationale ##
+### Rationale 
 
 NeTV2 uses Migen for its HDL, and uses many components from the LiteX project.
 These are primarily written in Python, which has a large number of options
@@ -154,5 +154,5 @@ Visual Studio Code needs to know where modules are.  These are specified in envi
 $ python ./netv2mvp.py --lx-print-env > .env
 ```
 
-## Production scripts ##
+# Production scripts 
 There's a number of scripts used to assist with integration into the Raspberry Pi runtime environment. They are all located in https://github.com/alphamaxmedia/netv2mvp-scripts/. In this location, you'll find the scripts that do the one-click update, openocd manipulation of bitstream and SPI ROM, publishing of status info to JSON feed, and Magic Mirror config info. This repository is just for the FPGA design.
