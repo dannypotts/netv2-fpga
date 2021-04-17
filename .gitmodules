@@ -1,6 +1,6 @@
 [submodule "deps/litex"]
 	path = deps/litex
-	url = https://github.com/alphamaxmedia/litex.git
+	url = https://github.com/dannypotts/litex.git
 	branch = master
 [submodule "deps/migen"]
 	path = deps/migen
